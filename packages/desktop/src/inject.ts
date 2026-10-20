@@ -1,7 +1,7 @@
 //! One-click setup: registers Journal as an MCP server in each agent's user-level config.
 //! (Ported from the Rust inject.rs.)
 //! - Claude Code: top-level `mcpServers` key of ~/.claude.json, entry {"type":"http", url}.
-//! - Codex: `[mcp_servers.journal]` table with `url` in ~/.codex/config.toml (TOML —
+//! - Codex: `[mcp_servers.manta-journal]` table with `url` in ~/.codex/config.toml (TOML —
 //!   edited section-wise, never a whole-file JSON parse).
 //! - Hermes: `mcp_servers.journal` mapping with `url` in ~/.hermes/config.yaml
 //!   (per hermes-agent's official MCP docs — Claude's mcpServers block maps to
@@ -19,6 +19,7 @@
 //! Every write is preceded by an automatic `<file>.journal-backup` copy.
 
 import fs from "node:fs";
+import { tMain } from './i18n';
 import os from "node:os";
 import path from "node:path";
 
@@ -30,7 +31,7 @@ import {
   upsertYamlMappingEntry,
 } from "./yaml-section";
 
-const SERVER_KEY = "journal";
+const SERVER_KEY = "manta-journal";
 
 /** Agents Journal can register itself with. The renderer's connector cards are
  *  generated from this union; keep api.ts's ConnectorAgent in sync. */
@@ -51,11 +52,11 @@ function agentSpec(agent: ConnectorAgent): {
   dir: string;
   /** Config file basename. */
   file: string;
-  /** JSON agents: the `mcpServers.journal` entry value to write. */
+  /** JSON agents: the `mcpServers.manta-journal` entry value to write. */
   entry?: Record<string, unknown>;
-  /** TOML agents (codex): section body lines written under [mcp_servers.journal]. */
+  /** TOML agents (codex): section body lines written under [mcp_servers.manta-journal]. */
   tomlLines?: string[];
-  /** YAML agents (hermes): entry body lines written under rootKey → journal. */
+  /** YAML agents (hermes): entry body lines written under rootKey → manta-journal. */
   yamlEntry?: { rootKey: string; lines: string[] };
   /** How a config change takes effect, phrased for the inject result message
    *  (most agents read their config per session; workbuddy also needs trust). */
@@ -73,7 +74,7 @@ function agentSpec(agent: ConnectorAgent): {
         dir: os.homedir(),
         file: ".claude.json",
         entry: { type: "http", url },
-        effect: "新会话生效",
+        effect: tMain('connector.effect.newSession'),
       };
     case "codex":
       return {
@@ -81,7 +82,7 @@ function agentSpec(agent: ConnectorAgent): {
         dir: path.join(os.homedir(), ".codex"),
         file: "config.toml",
         tomlLines: [`url = ${JSON.stringify(url)}`],
-        effect: "新会话生效",
+        effect: tMain('connector.effect.newSession'),
       };
     case "hermes":
       return {
@@ -89,7 +90,7 @@ function agentSpec(agent: ConnectorAgent): {
         dir: path.join(os.homedir(), ".hermes"),
         file: "config.yaml",
         yamlEntry: { rootKey: "mcp_servers", lines: [`url: ${JSON.stringify(url)}`] },
-        effect: "新会话生效",
+        effect: tMain('connector.effect.newSession'),
       };
     case "joycode":
       return {
@@ -97,7 +98,7 @@ function agentSpec(agent: ConnectorAgent): {
         dir: path.join(os.homedir(), ".joycode"),
         file: "joycode-mcp.json",
         entry: { url, disabled: false },
-        effect: "新会话生效",
+        effect: tMain('connector.effect.newSession'),
       };
     case "workbuddy":
       return {
@@ -105,7 +106,7 @@ function agentSpec(agent: ConnectorAgent): {
         dir: path.join(os.homedir(), ".workbuddy"),
         file: "mcp.json",
         entry: { type: "http", url, disabled: false },
-        effect: "在「连接器管理 → 自定义连接器」中信任该服务后新会话生效",
+        effect: tMain('connector.effect.trustFirst'),
       };
   }
 }
@@ -120,7 +121,7 @@ function readConfig(p: string): Record<string, any> {
   try {
     return JSON.parse(fs.readFileSync(p, "utf-8"));
   } catch (e) {
-    throw new Error(`解析 ${p} 失败（文件不是合法 JSON）: ${e}`);
+    throw new Error(tMain('connector.parseFailed', p, String(e)));
   }
 }
 
@@ -176,14 +177,14 @@ export function inject(agent: ConnectorAgent): string {
     config.mcpServers[SERVER_KEY] = spec.entry!;
     writeConfig(agent, p, config);
   }
-  return `Journal 记忆总线已绑定至 ${spec.label}（${p}），${spec.effect}。`;
+  return tMain('connector.boundToast', spec.label, p, spec.effect);
 }
 
 export function remove(agent: ConnectorAgent): string {
   const spec = agentSpec(agent);
   const p = configPath(agent);
   const text = fs.existsSync(p) ? fs.readFileSync(p, "utf-8") : "";
-  const notBound = `Journal 未绑定过 ${spec.label}，无需解绑。`;
+  const notBound = tMain('connector.notBoundToast', spec.label);
   if (spec.tomlLines) {
     const next = stripTomlSection(text, SERVER_KEY);
     if (next === text) return notBound;
@@ -211,7 +212,7 @@ export function remove(agent: ConnectorAgent): string {
       return notBound;
     }
   }
-  return `已解绑 Journal 记忆总线（${p}），新会话生效。`;
+  return tMain('connector.unboundToast', p);
 }
 
 export function isInjected(agent: ConnectorAgent): boolean {
@@ -250,5 +251,5 @@ export function asAgent(value: unknown): ConnectorAgent {
   ) {
     return value;
   }
-  throw new Error(`未知的连接器 Agent：${value}`);
+  throw new Error(tMain('connector.unknownAgent', String(value)));
 }

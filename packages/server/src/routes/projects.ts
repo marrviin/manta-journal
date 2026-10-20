@@ -4,6 +4,7 @@
 //! store (store.ts).
 
 import type { Static } from '@sinclair/typebox';
+import { tReq } from '../i18n';
 import type { FastifyInstance } from 'fastify';
 
 import { OkResponse, ProjectIdParams, ProjectInfoSchema, ProjectsResponse, RegisterProjectBody } from '../schemas';
@@ -23,7 +24,7 @@ export default async function projectRoutes(app: FastifyInstance): Promise<void>
     },
     async (req) => {
       const projectId = req.body.projectId.trim();
-      if (!projectId) throw app.httpErrors.badRequest('projectId 不能为空');
+      if (!projectId) throw app.httpErrors.badRequest(tReq('err.projectIdRequired'));
       return app.core.registerProject(projectId, req.body.name);
     },
   );
@@ -36,7 +37,7 @@ export default async function projectRoutes(app: FastifyInstance): Promise<void>
     async (req) => {
       // Reserved virtual project (agent-level global memories) — never deletable.
       if (req.params.projectId === GLOBAL_PROJECT)
-        throw app.httpErrors.badRequest('全局记忆项目不可删除');
+        throw app.httpErrors.badRequest(tReq('err.globalNotRemovable'));
       await app.core.removeProject(req.params.projectId);
       return { ok: true };
     },

@@ -148,7 +148,7 @@ export async function handleJsonRpc(
           protocolVersion:
             typeof msg.params?.protocolVersion === 'string' ? msg.params.protocolVersion : '2024-11-05',
           capabilities: { tools: {} },
-          serverInfo: { name: 'journal', version: app.getVersion() },
+          serverInfo: { name: 'manta-journal', version: app.getVersion() },
           instructions:
             'Journal is the cross-session shared memory for this project: previous agents distilled facts ' +
             '(decisions, pitfalls, conventions, env quirks) that future tasks must not rediscover the hard way. ' +

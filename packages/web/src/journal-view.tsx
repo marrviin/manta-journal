@@ -16,6 +16,8 @@ import { Empty, Progress, Spin } from "antd";
 import * as api from "./api";
 import type { JournalEntry } from "./types";
 import { JournalMd } from "./journal-md";
+import { useI18n } from "./i18n";
+import { t, type Lang } from "@manta-journal/shared";
 
 const WEEKDAYS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 
@@ -28,23 +30,31 @@ const PER_ENTRY_MS = 70_000;
  *  pool); the estimate models the same wave rhythm. */
 const CONCURRENCY = 3;
 
-/** "2026-10-13" → 「2026年10月13日 · 周二」 (parsed as local time — the date
- *  IS the local day the file was written for). */
-function dayLabel(date: string): string {
+/** "2026-10-13" → 「2026年10月13日 · 周二」 / "Tuesday, October 13, 2026"
+ *  (parsed as local time — the date IS the local day the file was written for). */
+function dayLabel(lang: Lang, date: string): string {
   const [y, m, d] = date.split("-").map(Number);
   const dt = new Date(y, m - 1, d);
+  if (lang === "en") {
+    return new Intl.DateTimeFormat("en-US", {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    }).format(dt);
+  }
   return `${y}年${m}月${d}日 · ${WEEKDAYS[dt.getDay()]}`;
 }
 
 /** Relative badge for today/yesterday, null otherwise */
-function dayRelative(date: string): string | null {
+function dayRelative(lang: Lang, date: string): string | null {
   const [y, m, d] = date.split("-").map(Number);
   const dt = new Date(y, m - 1, d);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const days = Math.round((today.getTime() - dt.getTime()) / 86_400_000);
-  if (days === 0) return "今天";
-  if (days === 1) return "昨天";
+  if (days === 0) return t(lang, "journal.today");
+  if (days === 1) return t(lang, "journal.yesterday");
   return null;
 }
 
@@ -88,11 +98,12 @@ function RedCircleBadge({ text }: { text: string }) {
 /** Date header + rule shared by real and still-being-written cards (also used
  *  by the standalone journal-book window's pages) */
 export function DateHeader({ date }: { date: string }) {
-  const rel = dayRelative(date);
+  const { lang } = useI18n();
+  const rel = dayRelative(lang, date);
   return (
     <>
       <div className="jnl-date mb-1 flex items-baseline gap-2 pb-1">
-        <h3 className="m-0 text-xl font-semibold">{dayLabel(date)}</h3>
+        <h3 className="m-0 text-xl font-semibold">{dayLabel(lang, date)}</h3>
         {rel && <RedCircleBadge text={rel} />}
       </div>
       <svg className="jnl-date-rule" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true">
@@ -122,12 +133,13 @@ function PendingCard({
   /** Card layout classes (padding/spacing) — callers match the entry cards */
   className?: string;
 }) {
+  const { t } = useI18n();
   return (
     <section className={`jnl-paper ${className}`}>
       <DateHeader date={date} />
       <div className="mt-5">
         <Progress percent={pendingPercent(date, owing, startedAt)} status="active" showInfo={false} size="small" />
-        <div className="mt-1 text-xs opacity-50">正在补写这一天的日记…</div>
+        <div className="mt-1 text-xs opacity-50">{t("journal.pendingWriting")}</div>
       </div>
     </section>
   );
@@ -149,6 +161,7 @@ export function JournalView({
    *  responsive grid (1/2/3 columns by breakpoint), each card its own height. */
   layout?: "list" | "grid";
 }) {
+  const { t } = useI18n();
   const [entries, setEntries] = useState<JournalEntry[] | null>(null);
   /** Days this project still owes a journal (ascending from the server),
    *  removed one by one as the poll sees their files land */
@@ -163,7 +176,9 @@ export function JournalView({
     api
       .listJournals(project.path)
       .then(setEntries)
-      .catch((e) => onNotify(`加载日志失败: ${e?.message ?? e}`, "error"));
+      .catch((e) =>
+        onNotify(t("journal.loadFailed", String(e?.message ?? e)), "error"),
+      );
   }, [project.path, onNotify]);
 
   useEffect(() => {
@@ -250,7 +265,7 @@ export function JournalView({
   if (entries.length === 0 && owing.length === 0) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2">
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有日记" />
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t("journal.empty")} />
       </div>
     );
   }
@@ -282,7 +297,7 @@ export function JournalView({
             <section
               key={date}
               className={`jnl-paper ${cardCls} cursor-pointer transition-shadow hover:shadow-lg`}
-              title="打开日记本"
+              title={t("journal.openBook")}
               onClick={() => api.openJournalWindow(project.path, date)}
             >
               <DateHeader date={date} />

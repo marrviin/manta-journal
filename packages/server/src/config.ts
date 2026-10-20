@@ -2,7 +2,7 @@
 //! local mode (Electron spawns it as a child process, passing the user's LLM
 //! settings through env) and remote mode (user-deployed Docker, env in compose).
 
-import { LOCAL_EMBED_MODEL, PROVIDER_DEFAULT, embedSignatureOf, type LlmConfig } from '@journal/shared';
+import { LOCAL_EMBED_MODEL, PROVIDER_DEFAULT, embedSignatureOf, type LlmConfig } from '@manta-journal/shared';
 
 // Shared contracts — memory-core.ts and app.ts keep importing them from './config'.
 export { embedSignatureOf, LOCAL_EMBED_MODEL };

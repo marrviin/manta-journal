@@ -6,8 +6,16 @@ import { app, BrowserWindow, Menu, nativeImage, Tray, clipboard } from 'electron
 import path from 'node:path';
 
 /** App identity drives userData (…/Application Support/<name>) — pin it instead of
- *  letting dev (@journal/desktop) and packaged (productName) resolve differently. */
+ *  letting dev (@manta-journal/desktop) and packaged (productName) resolve differently. */
 app.setName('Journal');
+
+/** JOURNAL_USER_DATA isolates a second instance (dev alongside the always-on
+ *  packaged app) into its own settings/memory/logs/watcher. Must run before
+ *  anything reads userData — module top is the earliest hook. The packaged app
+ *  never sets it, so it keeps using the default Journal dir. */
+if (process.env.JOURNAL_USER_DATA) {
+  app.setPath('userData', path.resolve(process.env.JOURNAL_USER_DATA));
+}
 
 import * as store from './store';
 import * as mem0 from './mem0';
@@ -16,6 +24,7 @@ import { initLog, log } from './log';
 import { registerIpc } from './ipc';
 import { closeJournalWindow } from './journal-window';
 import { runMcpServer, startMcpHttpServer, setMcpContext, mcpPort, McpHttpHandle } from './mcp-server';
+import { tMain } from './i18n';
 
 if (process.argv.includes('--mcp-server')) {
   // stdout is the JSON-RPC transport: a stray console.log (ours or a dependency's)
@@ -111,6 +120,11 @@ async function startGui(): Promise<void> {
     win.show();
   });
 
+  const userDataDir = app.getPath('userData');
+  store.open(userDataDir);
+  setMcpContext(userDataDir);
+  initLog(userDataDir);
+  log('GUI 启动');
   createTray(win);
 
   // Startup-freeze diagnosis: the renderer's console (long-task prints, boot marks)
@@ -132,11 +146,6 @@ async function startGui(): Promise<void> {
     });
   }
 
-  const userDataDir = app.getPath('userData');
-  store.open(userDataDir);
-  setMcpContext(userDataDir);
-  initLog(userDataDir);
-  log('GUI 启动');
   startLocalMcp();
   // mem0 awaits a telemetry report (posthog) on add/getAll — unreachable network
   // hangs the import loop; disable it entirely.
@@ -188,7 +197,7 @@ async function startGui(): Promise<void> {
         current: 0,
         total: 0,
         report: { added: 0, updated: 0, deleted: 0 },
-        notice: `启动初始化失败，监听与导入已暂停: ${e}`,
+        notice: tMain('notice.startupFailed', String(e)),
       });
     }
   })();
@@ -212,20 +221,20 @@ function createTray(win: BrowserWindow): void {
 
   const menu = Menu.buildFromTemplate([
     {
-      label: '显示主窗口',
+      label: tMain('tray.show'),
       click: () => showMainWindow(win),
     },
     { type: 'separator' },
     {
       // Built once at startup; the click handler always writes the live endpoint.
-      label: `复制 MCP 服务地址（http://127.0.0.1:${mcpPort()}/mcp）`,
+      label: tMain('tray.copyMcp', `http://127.0.0.1:${mcpPort()}/mcp`),
       click: () => {
         clipboard.writeText(`http://127.0.0.1:${mcpPort()}/mcp`);
       },
     },
     { type: 'separator' },
     {
-      label: '退出 Journal',
+      label: tMain('tray.quit'),
       click: () => app.quit(),
     },
   ]);

@@ -12,6 +12,7 @@
 //! wildcard-less directory entries match all files beneath them.
 
 import chokidar, { type FSWatcher } from 'chokidar';
+import { tMain } from './i18n';
 import crypto from 'node:crypto';
 import path from 'node:path';
 import os from 'node:os';
@@ -519,7 +520,7 @@ async function runImport(
       current: 0,
       total: 0,
       report: { added: 0, updated: 0, deleted: 0 },
-      notice: `存量导入中断: ${e}`,
+      notice: tMain('notice.importInterrupted', String(e)),
     });
     throw e;
   }
@@ -540,7 +541,7 @@ async function doRunImport(
       current: 0,
       total: 0,
       report: { added: 0, updated: 0, deleted: 0 },
-      notice: '记忆服务未配置，已有记忆未导入',
+      notice: tMain('notice.memoryUnconfigured'),
     });
     return;
   }
@@ -598,7 +599,7 @@ async function doRunImport(
         const report = await ingestFileOnce(project, file, rule, onIngestedCb).catch(
           (e): mem0.IngestReport => {
             log(`importExisting: 单文件导入失败 ${file}: ${e}`);
-            return { added: 0, updated: 0, deleted: 0, notice: '记忆入库失败' };
+            return { added: 0, updated: 0, deleted: 0, notice: tMain('notice.ingestFailed') };
           },
         );
         log(`importExisting: 完成 ${path.basename(file)} added=${report.added} updated=${report.updated} deleted=${report.deleted}${report.notice ? ` notice=${report.notice}` : ''}`);

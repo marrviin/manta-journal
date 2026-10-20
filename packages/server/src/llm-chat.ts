@@ -3,7 +3,7 @@
 //! /chat/completions protocol; this serves Journal's own generation features
 //! (journal writer) — mem0 keeps its own LLM instance for extraction.
 
-import { withTimeout } from '@journal/shared';
+import { withTimeout } from '@manta-journal/shared';
 
 import type { LlmConfig } from './config';
 

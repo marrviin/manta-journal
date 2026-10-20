@@ -1,4 +1,5 @@
 import type { Static } from '@sinclair/typebox';
+import { tReq } from '../i18n';
 import type { FastifyInstance } from 'fastify';
 
 import { IngestBody, IngestResponse } from '../schemas';
@@ -10,9 +11,9 @@ export default async function ingestRoutes(app: FastifyInstance): Promise<void> 
     async (req) => {
       const b = req.body;
       const projectId = b.projectId.trim();
-      if (!projectId) throw app.httpErrors.badRequest('projectId 不能为空');
+      if (!projectId) throw app.httpErrors.badRequest(tReq('err.projectIdRequired'));
       const raw = b.raw.trim();
-      if (!raw) throw app.httpErrors.badRequest('记忆内容不能为空');
+      if (!raw) throw app.httpErrors.badRequest(tReq('err.contentRequired'));
       const meta = {
         agent: b.meta?.agent ?? 'unknown',
         type: b.meta?.type ?? 'local-memory',

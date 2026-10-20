@@ -128,6 +128,10 @@ export const USER_DISPLAY_NAME = 'user_display_name';
 /** 搭档性格：日记作者的性格底色，值为 SBTI 27 型之一的 id（空 = 默认口吻）。 */
 export const PARTNER_PERSONALITY = 'partner_personality';
 
+/** UI language of the connected display layer ('zh' | 'en') — pushed on every
+ *  settings-window switch; drives the hourly journal scheduler's output language. */
+export const JOURNAL_LANGUAGE = 'journal_language';
+
 export function getSetting(dataDir: string, key: string): string | null {
   const row = open(dataDir)
     .prepare('SELECT value FROM settings WHERE key = ?')

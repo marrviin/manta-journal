@@ -38,10 +38,16 @@ import {
   SettingOutlined,
 } from "@ant-design/icons";
 import cx from "classnames";
-import { AgentIcon } from "./agent-icon";
-import { SBTI_TYPES } from "@journal/shared";
+import { AgentIcon, agentLabel } from "./agent-icon";
+import { useI18n } from "./i18n";
+import {
+  t,
+  sbtiLocalized,
+  SBTI_TYPES,
+  type I18nKey,
+} from "@manta-journal/shared";
 import { SBTI_IMAGES } from "./sbti-images";
-import { ThemeProviders } from "./theme";
+import { AppProviders } from "./theme";
 import * as api from "./api";
 import appIcon from "./assets/app-icon.png";
 import openaiIcon from "./assets/providers/openai.svg";
@@ -67,23 +73,23 @@ type Notify = (message: string, type?: "info" | "error") => void;
  *  gray content page, WorkBuddy-style. */
 const CARD = "flex items-center gap-3 rounded-xl bg-white px-4 py-3";
 
-const TABS = [
-  { key: "common", label: "通用", icon: <SettingOutlined /> },
-  { key: "personalization", label: "个性化", icon: <UserOutlined /> },
-  { key: "general", label: "模型", icon: <ExperimentOutlined /> },
-  { key: "watch", label: "记忆管理", icon: <ApiOutlined /> },
-  { key: "connector", label: "连接器", icon: <LinkOutlined /> },
-  { key: "data", label: "数据管理", icon: <DatabaseOutlined /> },
-  { key: "about", label: "关于", icon: <InfoCircleOutlined /> },
+const TABS: { key: string; label: I18nKey; icon: React.ReactNode }[] = [
+  { key: "common", label: "settings.tab.common", icon: <SettingOutlined /> },
+  { key: "personalization", label: "settings.tab.personalization", icon: <UserOutlined /> },
+  { key: "general", label: "settings.tab.general", icon: <ExperimentOutlined /> },
+  { key: "watch", label: "settings.tab.watch", icon: <ApiOutlined /> },
+  { key: "connector", label: "settings.tab.connector", icon: <LinkOutlined /> },
+  { key: "data", label: "settings.tab.data", icon: <DatabaseOutlined /> },
+  { key: "about", label: "settings.tab.about", icon: <InfoCircleOutlined /> },
 ];
 
 /** Sidebar menu groups (WorkBuddy-style: a muted group label above each run of
  *  items). Keys must exist in TABS. */
-const MENU_GROUPS: { label: string; keys: string[] }[] = [
-  { label: "设置", keys: ["common"] },
-  { label: "功能", keys: ["personalization", "general", "watch", "connector"] },
-  { label: "数据", keys: ["data"] },
-  { label: "其他", keys: ["about"] },
+const MENU_GROUPS: { label: I18nKey; keys: string[] }[] = [
+  { label: "settings.group.setup", keys: ["common"] },
+  { label: "settings.group.features", keys: ["personalization", "general", "watch", "connector"] },
+  { label: "settings.group.data", keys: ["data"] },
+  { label: "settings.group.other", keys: ["about"] },
 ];
 
 /** Window entry (mounted by main.tsx when the URL carries ?window=settings):
@@ -91,9 +97,9 @@ const MENU_GROUPS: { label: string; keys: string[] }[] = [
  *  AntdApp instance. */
 export function SettingsWindow() {
   return (
-    <ThemeProviders>
+    <AppProviders>
       <SettingsWindowInner />
-    </ThemeProviders>
+    </AppProviders>
   );
 }
 
@@ -123,7 +129,8 @@ function SettingsWindowInner() {
 }
 
 function SettingsShell({ onNotify }: { onNotify: Notify }) {
-  const [pane, setPane] = useState("general");
+  const { t } = useI18n();
+  const [pane, setPane] = useState("common");
   const [query, setQuery] = useState("");
   // macOS hiddenInset: the traffic lights float over the sidebar's top-left, so the
   // sidebar starts with a drag strip below them. Other platforms have a native
@@ -144,7 +151,7 @@ function SettingsShell({ onNotify }: { onNotify: Notify }) {
   useEffect(() => {
     if (!visibleKeys) {
       // Search cleared: restore a pane if an empty result had blanked it out.
-      if (!pane) setPane("general");
+      if (!pane) setPane("common");
       return;
     }
     if (!visibleKeys.includes(pane)) {
@@ -163,7 +170,7 @@ function SettingsShell({ onNotify }: { onNotify: Notify }) {
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="搜索设置项"
+            placeholder={t("settings.searchPlaceholder")}
             prefix={<SearchOutlined className="text-muted" />}
             allowClear
             variant="filled"
@@ -180,7 +187,7 @@ function SettingsShell({ onNotify }: { onNotify: Notify }) {
             return (
               <div key={group.label}>
                 <div className="px-2.5 pb-1.5 text-xs text-muted select-none">
-                  {query.trim() ? "搜索结果" : group.label}
+                  {query.trim() ? t("settings.searchResults") : t(group.label)}
                 </div>
                 <div className="flex flex-col gap-0.5">
                   {items.map((tab) => {
@@ -198,7 +205,7 @@ function SettingsShell({ onNotify }: { onNotify: Notify }) {
                         )}
                       >
                         <span className="text-muted">{tab.icon}</span>
-                        <span>{tab.label}</span>
+                        <span>{t(tab.label)}</span>
                       </button>
                     );
                   })}
@@ -236,7 +243,7 @@ function SettingsShell({ onNotify }: { onNotify: Notify }) {
               <CommonPane />
             ) : (
               <p className="m-0 py-10 text-center text-xs text-muted">
-                没有匹配「{query.trim()}」的设置项
+                {t("settings.noMatch", query.trim())}
               </p>
             )}
           </div>
@@ -255,7 +262,15 @@ function SettingsShell({ onNotify }: { onNotify: Notify }) {
  *  openrouter/ollama/mistral 取自 simple-icons（CC0）；deepseek/xai/groq 取自
  *  官网 favicon.ico；zhipu/volcengine 取自官网 favicon.png；siliconflow 取自
  *  siliconflow.cn 的 favicon（实为 PNG）；kimi 取自 kimi.com 的 favicon.ico。 */
-const LLM_PRESETS = [
+const LLM_PRESETS: {
+  key: string;
+  label: string;
+  /** Localized display name (Chinese-named presets); absent → label as-is */
+  labelKey?: I18nKey;
+  baseUrl: string | null;
+  model: string;
+  iconSrc: string | null;
+}[] = [
   {
     key: "openai",
     label: "OpenAI",
@@ -272,14 +287,16 @@ const LLM_PRESETS = [
   },
   {
     key: "kimi",
-    label: "月之暗面 Moonshot",
+    label: "Moonshot",
+    labelKey: "settings.preset.moonshot",
     baseUrl: "https://api.moonshot.cn/v1",
     model: "kimi-k2",
     iconSrc: kimiIcon,
   },
   {
     key: "zhipu",
-    label: "智谱 GLM",
+    label: "Zhipu GLM",
+    labelKey: "settings.preset.zhipu",
     baseUrl: "https://open.bigmodel.cn/api/paas/v4",
     model: "glm-4.6",
     iconSrc: zhipuIcon,
@@ -300,21 +317,24 @@ const LLM_PRESETS = [
   },
   {
     key: "siliconflow",
-    label: "硅基流动",
+    label: "SiliconFlow",
+    labelKey: "settings.preset.siliconflow",
     baseUrl: "https://api.siliconflow.cn/v1",
     model: "deepseek-ai/DeepSeek-V3",
     iconSrc: siliconflowIcon,
   },
   {
     key: "dashscope",
-    label: "阿里云百炼",
+    label: "Bailian",
+    labelKey: "settings.preset.dashscope",
     baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
     model: "qwen-plus",
     iconSrc: alibabacloudIcon,
   },
   {
     key: "ark",
-    label: "火山方舟",
+    label: "Volcengine Ark",
+    labelKey: "settings.preset.ark",
     baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
     model: "doubao-seed-1.6",
     iconSrc: volcengineIcon,
@@ -358,13 +378,21 @@ const LLM_PRESETS = [
   },
   {
     key: "ollama",
-    label: "Ollama（本地）",
+    label: "Ollama",
+    labelKey: "settings.preset.ollama",
     baseUrl: "http://localhost:11434/v1",
     // 本地模型的常用占位；用户按已 pull 的模型改。
     model: "qwen3:8b",
     iconSrc: ollamaIcon,
   },
-  { key: "custom", label: "自定义", baseUrl: null, model: "", iconSrc: null },
+  {
+    key: "custom",
+    label: "Custom",
+    labelKey: "settings.preset.custom",
+    baseUrl: null,
+    model: "",
+    iconSrc: null,
+  },
 ];
 
 /** 内置本地 embedding 模型（固定，无配置面；仅供提示文案展示）。 */
@@ -375,6 +403,12 @@ function presetFor(baseUrl: string): (typeof LLM_PRESETS)[number] | null {
   return LLM_PRESETS.find((p) => p.baseUrl && p.baseUrl === baseUrl) ?? null;
 }
 
+/** Localized display label: presets with a Chinese display name carry a
+ *  labelKey; brand-name presets render their label verbatim. */
+function presetLabel(p: (typeof LLM_PRESETS)[number], lang: "zh" | "en"): string {
+  return p.labelKey ? t(lang, p.labelKey) : p.label;
+}
+
 /** 由当前 baseUrl 反查命中的预设 key（未命中 → 「自定义」）。 */
 function presetKeyFor(baseUrl: string): string {
   return presetFor(baseUrl)?.key ?? "custom";
@@ -382,8 +416,9 @@ function presetKeyFor(baseUrl: string): string {
 
 /** 卡片标题（对齐 joybuddy ModelCard 的 entry.name）：baseUrl 命中预设用预设名，
  *  未命中读作自定义服务。 */
-function presetLabelFor(baseUrl: string): string {
-  return presetFor(baseUrl)?.label ?? "自定义服务";
+function presetLabelFor(baseUrl: string, lang: "zh" | "en"): string {
+  const preset = presetFor(baseUrl);
+  return preset ? presetLabel(preset, lang) : t(lang, "settings.model.customService");
 }
 
 /** 卡片圆标图标：命中预设用其品牌图标，未命中（自定义）回退到 API 图标。 */
@@ -460,20 +495,23 @@ function FormField({
   );
 }
 
-/** "Common" pane: 常规分组。语言项目前只支持简体中文（后续多语言时在此追加选项），
- *  界面文案尚未接入 i18n，选择仅作占位展示。 */
+/** "Common" pane: 常规分组。语言切换即改主进程 store（ui_language），所有窗口
+ *  经 journal://language-changed 即时跟随，并推给记忆服务（journal_language）。 */
 function CommonPane() {
-  const [language, setLanguage] = useState("zh-CN");
+  const { t, lang, setLang } = useI18n();
   return (
-    <SettingsSection title="常规">
+    <SettingsSection title={t("settings.section.general")}>
       <SettingRow
-        title="语言"
+        title={t("settings.language")}
         control={
           <Select
-            value={language}
-            onChange={setLanguage}
+            value={lang}
+            onChange={setLang}
             className="w-40"
-            options={[{ value: "zh-CN", label: "简体中文" }]}
+            options={[
+              { value: "zh" as const, label: t("settings.lang.zh") },
+              { value: "en" as const, label: t("settings.lang.en") },
+            ]}
           />
         }
       />
@@ -486,6 +524,7 @@ function CommonPane() {
  *  (activation hot-reloads watching; an embedding change invalidates stored vectors —
  *  the backend returns the notice). Storage mode lives in the 数据管理 pane. */
 function GeneralPane({ onNotify }: { onNotify: Notify }) {
+  const { t, lang } = useI18n();
   const [models, setModels] = useState<api.ModelEntry[] | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [mode, setMode] = useState<"local" | "remote">("local");
@@ -512,7 +551,9 @@ function GeneralPane({ onNotify }: { onNotify: Notify }) {
         setModels(r.models);
         setActiveId(r.activeId);
       })
-      .catch((e) => onNotify(`加载模型列表失败: ${e?.message ?? e}`, "error"));
+      .catch((e) =>
+        onNotify(t("err.loadModels", String(e?.message ?? e)), "error"),
+      );
     api
       .getSettings()
       .then((s) => setMode(s.mode))
@@ -556,11 +597,11 @@ function GeneralPane({ onNotify }: { onNotify: Notify }) {
     const url = draft.baseUrl.trim();
     const name = draft.model.trim();
     if (!url) {
-      onNotify("请填写 API Base URL", "error");
+      onNotify(t("settings.model.needUrl"), "error");
       return;
     }
     if (!name) {
-      onNotify("请填写模型名", "error");
+      onNotify(t("settings.model.needModel"), "error");
       return;
     }
     setSaving(true);
@@ -585,9 +626,9 @@ function GeneralPane({ onNotify }: { onNotify: Notify }) {
       setActiveId(res.activeId);
       closeEdit();
       // 主进程在 embedding 模型变更时会带回向量失效警告——原样展示。
-      onNotify(res.notice || (draft.id ? "模型已保存" : "模型已添加"));
+      onNotify(res.notice || (draft.id ? t("settings.model.saved") : t("settings.model.added")));
     } catch (e) {
-      onNotify(`保存失败: ${e}`, "error");
+      onNotify(t("err.save", String(e)), "error");
     } finally {
       setSaving(false);
     }
@@ -598,9 +639,9 @@ function GeneralPane({ onNotify }: { onNotify: Notify }) {
     try {
       const res = await api.activateModel(m.id);
       setActiveId(res.activeId);
-      onNotify(res.notice || "已切换使用中的模型");
+      onNotify(res.notice || t("settings.model.switched"));
     } catch (e) {
-      onNotify(`切换失败: ${e}`, "error");
+      onNotify(t("err.switch", String(e)), "error");
     }
   };
 
@@ -612,7 +653,7 @@ function GeneralPane({ onNotify }: { onNotify: Notify }) {
       setModels((prev) => prev?.filter((x) => x.id !== m.id) ?? prev);
       if (m.id === activeId) setActiveId(null);
     } catch (e) {
-      onNotify(`删除失败: ${e}`, "error");
+      onNotify(t("err.delete", String(e)), "error");
     }
   };
 
@@ -633,8 +674,8 @@ function GeneralPane({ onNotify }: { onNotify: Notify }) {
         <SettingsSection>
           {/* 顶部卡片（对齐记忆采集）：标题 + 描述在卡内，添加按钮在右侧。 */}
           <SettingRow
-            title="模型服务"
-            desc="可添加多个模型配置，点击下方卡片编辑，打开卡片右侧开关后即刻生效"
+            title={t("settings.model.title")}
+            desc={t("settings.model.desc")}
             control={
               <Button
                 type="primary"
@@ -642,16 +683,14 @@ function GeneralPane({ onNotify }: { onNotify: Notify }) {
                 onClick={openAdd}
                 className="shrink-0"
               >
-                添加模型
+                {t("settings.model.add")}
               </Button>
             }
           />
 
           {models?.length === 0 && (
             <p className="m-0 px-1 text-xs text-muted">
-              还没有添加模型。不加也可以用：语义检索默认走内置本地 Embedding（
-              {LOCAL_EMBED_MODEL}），添加模型服务只是为了启用 LLM
-              相关功能（如日志回填）。
+              {t("settings.model.empty", LOCAL_EMBED_MODEL)}
             </p>
           )}
 
@@ -686,7 +725,7 @@ function GeneralPane({ onNotify }: { onNotify: Notify }) {
                   <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-sm font-semibold text-fg">
-                        {presetLabelFor(m.baseUrl)}
+                        {presetLabelFor(m.baseUrl, lang)}
                       </span>
                       {isActive && (
                         <Tag
@@ -694,12 +733,12 @@ function GeneralPane({ onNotify }: { onNotify: Notify }) {
                           color="green"
                           className="m-0 shrink-0 text-[10px]"
                         >
-                          使用中
+                          {t("settings.model.active")}
                         </Tag>
                       )}
                     </div>
                     <div className="truncate text-xs text-muted">
-                      {m.model || "(未设置模型名)"}
+                      {m.model || t("settings.model.noModel")}
                     </div>
                   </div>
 
@@ -721,7 +760,7 @@ function GeneralPane({ onNotify }: { onNotify: Notify }) {
                   <span className="inline-flex min-w-0 items-center gap-1 overflow-hidden">
                     <LinkOutlined className="shrink-0" />
                     <span className="max-w-[320px] truncate">
-                      {m.baseUrl || "未设置服务地址"}
+                      {m.baseUrl || t("settings.model.noUrl")}
                     </span>
                   </span>
                   <Dropdown
@@ -732,7 +771,7 @@ function GeneralPane({ onNotify }: { onNotify: Notify }) {
                         {
                           key: "delete",
                           icon: <DeleteOutlined />,
-                          label: "删除",
+                          label: t("common.delete"),
                           danger: true,
                         },
                       ],
@@ -748,7 +787,7 @@ function GeneralPane({ onNotify }: { onNotify: Notify }) {
                       className="ml-auto shrink-0"
                       icon={<EllipsisOutlined />}
                       onClick={(e) => e.stopPropagation()}
-                      aria-label={`更多操作 ${m.model}`}
+                      aria-label={t("settings.model.more", m.model)}
                     />
                   </Dropdown>
                 </div>
@@ -760,7 +799,7 @@ function GeneralPane({ onNotify }: { onNotify: Notify }) {
 
       {/* 编辑弹窗（对齐 joybuddy 的 ModelForm + 弹窗交互）：预设下拉 + 脏检测，保存成功自动关闭。 */}
       <Modal
-        title={isNew ? "添加模型" : "编辑模型"}
+        title={isNew ? t("settings.model.addTitle") : t("settings.model.editTitle")}
         open={!!draft}
         onCancel={closeEdit}
         width={480}
@@ -768,21 +807,21 @@ function GeneralPane({ onNotify }: { onNotify: Notify }) {
         destroyOnHidden
         footer={
           <div className="flex justify-end gap-2">
-            <Button onClick={closeEdit}>取消</Button>
+            <Button onClick={closeEdit}>{t("common.cancel")}</Button>
             <Button
               type="primary"
               disabled={!dirty}
               loading={saving}
               onClick={() => void saveDraft()}
             >
-              保存
+              {t("common.save")}
             </Button>
           </div>
         }
       >
         {draft && (
           <div className="flex flex-col gap-4 py-2">
-            <FormField label="服务预设">
+            <FormField label={t("settings.model.preset")}>
               <Select
                 value={presetKey}
                 onChange={(key: string) => {
@@ -811,7 +850,7 @@ function GeneralPane({ onNotify }: { onNotify: Notify }) {
                       ) : (
                         <ApiOutlined className="text-[14px] text-muted" />
                       )}
-                      <span>{p.label}</span>
+                      <span>{presetLabel(p, lang)}</span>
                     </span>
                   ),
                 }))}
@@ -849,7 +888,7 @@ function GeneralPane({ onNotify }: { onNotify: Notify }) {
               />
             </FormField>
 
-            <FormField label="模型名">
+            <FormField label={t("settings.model.modelName")}>
               <Input
                 value={draft.model}
                 onChange={(e) => setDraft({ ...draft, model: e.target.value })}
@@ -871,6 +910,7 @@ function GeneralPane({ onNotify }: { onNotify: Notify }) {
  *  (SBTI 27-type card picker; empty = the writer's default voice). Text fields
  *  blur-save, cards save on click; failures roll the inputs back. */
 function PersonalizationPane({ onNotify }: { onNotify: Notify }) {
+  const { t, lang } = useI18n();
   /** null = still loading; "" = unset. */
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [personality, setPersonality] = useState("");
@@ -897,10 +937,10 @@ function PersonalizationPane({ onNotify }: { onNotify: Notify }) {
       })
       .catch((e) => {
         setDisplayName("");
-        if (String(e?.message ?? e).includes("记忆服务未连接")) {
+        if (e instanceof api.NotConnectedError) {
           setNoService(true);
         } else {
-          onNotify(`加载个性化设置失败: ${e?.message ?? e}`, "error");
+          onNotify(t("settings.persona.loadFailed", String(e?.message ?? e)), "error");
         }
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -933,31 +973,31 @@ function PersonalizationPane({ onNotify }: { onNotify: Notify }) {
       savedRef.current = prev;
       setDisplayName(prev.displayName);
       setPersonality(prev.personality);
-      onNotify(`保存失败: ${e}`, "error");
+      onNotify(t("err.save", String(e)), "error");
     }
   };
 
   if (noService) {
     return (
       <div className="rounded-xl bg-white px-5 py-4 text-xs leading-5 text-muted">
-        记忆服务未连接：个性化设置随记忆服务一起存储，请先在「模型」页完成服务配置。
+        {t("settings.persona.noService")}
       </div>
     );
   }
 
   if (displayName === null) {
-    return <p className="m-0 text-xs text-muted">加载中…</p>;
+    return <p className="m-0 text-xs text-muted">{t("common.loading")}</p>;
   }
 
   return (
     <div className="flex flex-col gap-5">
       <SettingsSection>
         <SettingRow
-          title="搭档如何称呼你"
+          title={t("settings.persona.howCalled")}
           control={
             <Input
               value={displayName}
-              placeholder="搭档"
+              placeholder={t("settings.persona.namePlaceholder")}
               onChange={(e) => setDisplayName(e.target.value)}
               onPressEnter={() => void persist({ displayName })}
               onBlur={() => void persist({ displayName })}
@@ -970,13 +1010,13 @@ function PersonalizationPane({ onNotify }: { onNotify: Notify }) {
       </SettingsSection>
       <SettingsSection>
         <SettingRow
-          title="搭档性格"
+          title={t("settings.persona.personality")}
           control={
             <Button
               icon={<SyncOutlined />}
               type="text"
               size="small"
-              aria-label="换一个性格"
+              aria-label={t("settings.persona.reroll")}
               onClick={() => {
                 // 重抽：从其余 26 型里随机换一个，失败回滚由 persist 处理
                 const pool = SBTI_TYPES.filter((t) => t.id !== personality);
@@ -988,11 +1028,12 @@ function PersonalizationPane({ onNotify }: { onNotify: Notify }) {
         >
           <div className="flex flex-col gap-3">
             {(() => {
-              const current = SBTI_TYPES.find((t) => t.id === personality);
+              const found = SBTI_TYPES.find((x) => x.id === personality);
+              const current = found ? sbtiLocalized(lang, found) : null;
               return current ? (
                 <div className="flex items-start gap-3">
                   <img
-                    src={SBTI_IMAGES[current.id] ?? ""}
+                    src={SBTI_IMAGES[found!.id] ?? ""}
                     alt={current.name}
                     className="h-20 w-20 shrink-0 rounded-xl object-cover select-none"
                     draggable={false}
@@ -1015,7 +1056,7 @@ function PersonalizationPane({ onNotify }: { onNotify: Notify }) {
                 </div>
               ) : (
                 <p className="m-0 text-xs text-muted">
-                  还没抽出性格，记忆服务连接后自动抽取
+                  {t("settings.persona.unset")}
                 </p>
               );
             })()}
@@ -1031,6 +1072,7 @@ function PersonalizationPane({ onNotify }: { onNotify: Notify }) {
  *  passthrough — every saveSettings call must re-send them, or the backend resets
  *  them to defaults. */
 function DataPane({ onNotify }: { onNotify: Notify }) {
+  const { t } = useI18n();
   /** Memory storage: local child service (default) or a user-deployed remote service. */
   const [mode, setMode] = useState<"local" | "remote">("local");
   const [remoteUrl, setRemoteUrl] = useState("");
@@ -1054,7 +1096,7 @@ function DataPane({ onNotify }: { onNotify: Notify }) {
           model: s.model,
         });
       })
-      .catch((e) => onNotify(`加载设置失败: ${e?.message ?? e}`, "error"));
+      .catch((e) => onNotify(t("settings.data.loadFailed", String(e?.message ?? e)), "error"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1074,11 +1116,13 @@ function DataPane({ onNotify }: { onNotify: Notify }) {
         null,
       );
       onNotify(
-        next === "remote" ? "已切换到远程记忆服务" : "已切换回本地记忆服务",
+        next === "remote"
+          ? t("settings.data.switchedRemote")
+          : t("settings.data.switchedLocal"),
       );
     } catch (e) {
       setMode(prev);
-      onNotify(`保存失败: ${e}`, "error");
+      onNotify(t("err.save", String(e)), "error");
     }
   };
 
@@ -1095,16 +1139,16 @@ function DataPane({ onNotify }: { onNotify: Notify }) {
         null,
       );
     } catch (e) {
-      onNotify(`保存失败: ${e}`, "error");
+      onNotify(t("err.save", String(e)), "error");
     }
   };
 
   const saveRemoteToken = async () => {
     if (!llm) return;
-    const t = remoteToken.trim();
+    const token = remoteToken.trim();
     // Untouched empty field = keep the stored token; typed text replaces; clearing
     // a previously-set token is an explicit clear (null = keep in the IPC contract).
-    if (!t && !hasRemoteToken) return;
+    if (!token && !hasRemoteToken) return;
     try {
       await api.saveSettings(
         llm.baseUrl,
@@ -1112,14 +1156,14 @@ function DataPane({ onNotify }: { onNotify: Notify }) {
         llm.model,
         "remote",
         remoteUrl,
-        t ? t : null,
+        token ? token : null,
       );
-      if (t) {
+      if (token) {
         setHasRemoteToken(true);
         setRemoteToken("");
       }
     } catch (e) {
-      onNotify(`保存失败: ${e}`, "error");
+      onNotify(t("err.save", String(e)), "error");
     }
   };
 
@@ -1128,7 +1172,7 @@ function DataPane({ onNotify }: { onNotify: Notify }) {
   const testConnection = async () => {
     const base = remoteUrl.trim().replace(/\/+$/, "");
     if (!base) {
-      onNotify("请先填写服务地址", "error");
+      onNotify(t("settings.data.needUrl"), "error");
       return;
     }
     setTesting(true);
@@ -1138,14 +1182,17 @@ function DataPane({ onNotify }: { onNotify: Notify }) {
         remoteToken.trim() || null,
       );
       if (!r.ok) {
-        onNotify(r.error ?? "连接失败", "error");
+        onNotify(r.error ?? t("settings.data.connectFailed"), "error");
         return;
       }
       onNotify(
-        `连接成功（服务端 Embedding：${r.embedModel ?? "内置本地模型"}）`,
+        t(
+          "settings.data.connectOk",
+          r.embedModel ?? t("settings.data.localEmbed"),
+        ),
       );
     } catch (e) {
-      onNotify(`测试失败: ${e}`, "error");
+      onNotify(t("settings.data.testFailed", String(e)), "error");
     } finally {
       setTesting(false);
     }
@@ -1156,8 +1203,8 @@ function DataPane({ onNotify }: { onNotify: Notify }) {
       {/* 本地子进程（默认，数据在 userData）或用户自部署的 server/ 远程服务。两种模式
           共用同一套 HTTP 客户端，只是地址不同；切换即时保存，失败回滚。 */}
       <SettingRow
-        title="记忆存储"
-        desc="记忆数据保存在本机子进程服务，或连接自行部署的远程 Journal 服务；切换即时保存，失败自动回滚"
+        title={t("settings.data.title")}
+        desc={t("settings.data.desc")}
         control={
           <Radio.Group
             value={mode}
@@ -1167,8 +1214,8 @@ function DataPane({ onNotify }: { onNotify: Notify }) {
             optionType="button"
             buttonStyle="solid"
             options={[
-              { value: "local", label: "本地服务" },
-              { value: "remote", label: "远程服务" },
+              { value: "local", label: t("settings.data.local") },
+              { value: "remote", label: t("settings.data.remote") },
             ]}
           />
         }
@@ -1176,12 +1223,10 @@ function DataPane({ onNotify }: { onNotify: Notify }) {
       {mode === "remote" && (
         <>
           <p className="m-0 px-1 text-xs leading-5 text-muted">
-            填写自行部署的 Journal 记忆服务地址（server/ 目录提供
-            Dockerfile）。远程模式下记忆与向量全部存在服务端，
-            本机仅保留展示镜像；服务不可达时语义检索与导入会直接报错，不会降级写本地。
+            {t("settings.data.remoteHelp")}
           </p>
           <SettingRow
-            title="服务地址"
+            title={t("settings.data.url")}
             control={
               <Input
                 value={remoteUrl}
@@ -1194,14 +1239,18 @@ function DataPane({ onNotify }: { onNotify: Notify }) {
             }
           />
           <SettingRow
-            title="访问令牌"
+            title={t("settings.data.token")}
             desc={
-              hasRemoteToken ? "已配置，留空保持不变" : "服务未设置令牌时可留空"
+              hasRemoteToken
+                ? t("settings.data.tokenSet")
+                : t("settings.data.tokenUnset")
             }
             control={
               <Input.Password
                 value={remoteToken}
-                placeholder={hasRemoteToken ? "••••••••" : "可选"}
+                placeholder={
+                  hasRemoteToken ? "••••••••" : t("settings.data.tokenOptional")
+                }
                 onChange={(e) => setRemoteToken(e.target.value)}
                 onBlur={() => void saveRemoteToken()}
                 className="w-50"
@@ -1209,15 +1258,15 @@ function DataPane({ onNotify }: { onNotify: Notify }) {
             }
           />
           <SettingRow
-            title="测试连接"
-            desc="对远程服务发起 /health 检查，验证地址与令牌（使用未保存的输入）"
+            title={t("settings.data.testTitle")}
+            desc={t("settings.data.testDesc")}
             control={
               <Button
                 icon={<ApiOutlined />}
                 loading={testing}
                 onClick={() => void testConnection()}
               >
-                测试
+                {t("common.test")}
               </Button>
             }
           />
@@ -1233,6 +1282,7 @@ function DataPane({ onNotify }: { onNotify: Notify }) {
  *  immediately, text edits save on blur) — the main process hot-reloads watching on
  *  every save and one-time imports existing content for newly enabled cards. */
 function WatchPane({ onNotify }: { onNotify: Notify }) {
+  const { t, lang } = useI18n();
   const [rules, setRules] = useState<api.WatchRule[] | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [draftAgent, setDraftAgent] = useState("");
@@ -1243,12 +1293,13 @@ function WatchPane({ onNotify }: { onNotify: Notify }) {
       .getWatchRules()
       .then(setRules)
       .catch((e) =>
-        onNotify(`加载记忆采集目录失败: ${e?.message ?? e}`, "error"),
+        onNotify(t("settings.watch.loadFailed", String(e?.message ?? e)), "error"),
       );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (!rules) return <p className="m-0 text-xs text-muted">加载中…</p>;
+  if (!rules)
+    return <p className="m-0 text-xs text-muted">{t("common.loading")}</p>;
 
   // Builtin cards render alphabetically by agent regardless of stored order;
   // custom cards keep the user's own ordering.
@@ -1271,7 +1322,7 @@ function WatchPane({ onNotify }: { onNotify: Notify }) {
     try {
       await api.saveWatchRules(next);
     } catch (e: any) {
-      onNotify(`保存失败: ${e?.message ?? e}`, "error");
+      onNotify(t("err.save", String(e?.message ?? e)), "error");
     }
   };
 
@@ -1299,7 +1350,7 @@ function WatchPane({ onNotify }: { onNotify: Notify }) {
     setAddOpen(false);
     setDraftAgent("");
     setDraftMatch("");
-    onNotify(`已添加「${agent}」采集目录`);
+    onNotify(t("settings.watch.added", agent));
   };
 
   return (
@@ -1307,8 +1358,8 @@ function WatchPane({ onNotify }: { onNotify: Notify }) {
       <SettingsSection>
         {/* 标题行：标题 + 描述在卡内，添加按钮在右侧 */}
         <SettingRow
-          title="记忆采集"
-          desc="监听各 Agent 的记忆文件，自动写入记忆库"
+          title={t("settings.watch.title")}
+          desc={t("settings.watch.desc")}
           control={
             <Button
               type="primary"
@@ -1316,7 +1367,7 @@ function WatchPane({ onNotify }: { onNotify: Notify }) {
               className="shrink-0"
               onClick={() => setAddOpen(true)}
             >
-              添加目录
+              {t("settings.watch.add")}
             </Button>
           }
         />
@@ -1327,10 +1378,10 @@ function WatchPane({ onNotify }: { onNotify: Notify }) {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="text-[13px] font-medium text-fg">
-                  {r.agent}
+                  {agentLabel(lang, r.agent)}
                 </span>
                 <Tag bordered={false} className="m-0 shrink-0 text-muted">
-                  内置
+                  {t("settings.watch.builtinTag")}
                 </Tag>
               </div>
               <div
@@ -1354,7 +1405,7 @@ function WatchPane({ onNotify }: { onNotify: Notify }) {
         {customs.length > 0 && (
           <>
             <div className="mt-2 px-1 text-xs font-medium text-muted">
-              自定义
+              {t("settings.watch.custom")}
             </div>
             <div className="flex flex-col gap-3">
               {customs.map((r) => (
@@ -1364,7 +1415,7 @@ function WatchPane({ onNotify }: { onNotify: Notify }) {
                     value={r.agent}
                     onChange={(e) => update(r.id, { agent: e.target.value })}
                     onBlur={() => void persist(rules)}
-                    placeholder="Agent 名"
+                    placeholder={t("settings.watch.agentPlaceholder")}
                     variant="borderless"
                     className="!px-0 font-medium"
                     style={{ width: 120 }}
@@ -1378,9 +1429,9 @@ function WatchPane({ onNotify }: { onNotify: Notify }) {
                     className="min-w-0 flex-1 !px-0 font-mono text-[13px]"
                   />
                   <Popconfirm
-                    title="删除该采集目录？已导入的记忆会保留。"
-                    okText="删除"
-                    cancelText="取消"
+                    title={t("settings.watch.deleteConfirm")}
+                    okText={t("common.delete")}
+                    cancelText={t("common.cancel")}
                     okButtonProps={{ danger: true }}
                     onConfirm={() =>
                       void persist(rules.filter((x) => x.id !== r.id))
@@ -1390,7 +1441,7 @@ function WatchPane({ onNotify }: { onNotify: Notify }) {
                       type="text"
                       size="small"
                       icon={<CloseOutlined />}
-                      aria-label={`删除 ${r.agent}`}
+                      aria-label={t("settings.watch.deleteAria", r.agent)}
                     />
                   </Popconfirm>
                   <Switch
@@ -1413,9 +1464,9 @@ function WatchPane({ onNotify }: { onNotify: Notify }) {
       {/* Add-card form modal: agent name is optional (derived from the match path when blank). */}
       <Modal
         open={addOpen}
-        title="添加采集目录"
-        okText="添加"
-        cancelText="取消"
+        title={t("settings.watch.addTitle")}
+        okText={t("common.add")}
+        cancelText={t("common.cancel")}
         width={480}
         okButtonProps={{ disabled: !draftMatch.trim() }}
         onOk={addCard}
@@ -1425,32 +1476,33 @@ function WatchPane({ onNotify }: { onNotify: Notify }) {
         <div className="flex flex-col gap-4 py-2">
           <div>
             <div className="mb-1.5 text-[13px] font-medium text-fg">
-              Agent 名
+              {t("settings.watch.agentLabel")}
               <span className="ml-1.5 text-xs font-normal text-muted">
-                留空则从路径推断
+                {t("settings.watch.agentHint")}
               </span>
             </div>
             <Input
               value={draftAgent}
               onChange={(e) => setDraftAgent(e.target.value)}
               onPressEnter={addCard}
-              placeholder="如 cursor"
+              placeholder={t("settings.watch.agentEg")}
             />
           </div>
           <div>
             <div className="mb-1.5 text-[13px] font-medium text-fg">
-              匹配表达式
+              {t("settings.watch.matchLabel")}
             </div>
             <Input
               value={draftMatch}
               onChange={(e) => setDraftMatch(e.target.value)}
               onPressEnter={addCard}
-              placeholder=".cursor/memory/*.md，逗号分隔多个条目"
+              placeholder={t("settings.watch.matchPlaceholder")}
               autoFocus
             />
             <div className="mt-1.5 text-xs leading-5 text-muted">
-              匹配表达式支持 <code>*</code> / <code>**</code> 通配符与{" "}
-              <code>&lt;slug&gt;</code> 展开（展开为当前项目名）。
+              {t("settings.watch.matchHintPre")} <code>*</code> /{" "}
+              <code>**</code> {t("settings.watch.matchHintMid")}{" "}
+              <code>&lt;slug&gt;</code> {t("settings.watch.matchHintPost")}
             </div>
           </div>
         </div>
@@ -1460,40 +1512,38 @@ function WatchPane({ onNotify }: { onNotify: Notify }) {
 }
 
 /** Connectors supported by the pane: one card per agent, rendered from this list.
- *  Adding an upstream is: extend inject.ts's ConnectorAgent + spec, then append here.
- *  `desc` states where the toggle writes (keep in sync with inject.ts's agentSpec);
- *  `note` carries an agent-specific extra step (workbuddy: writing the config only
- *  declares the server — it must also be trusted in workbuddy's UI). */
+ *  Adding an upstream is: extend inject.ts's ConnectorAgent + spec, then append here
+ *  (and add a settings.connector.desc.* entry to the shared i18n dictionary).
+ *  `descKey` states where the toggle writes (keep in sync with inject.ts's agentSpec). */
 const CONNECTORS: {
   agent: api.ConnectorAgent;
   name: string;
-  desc: string;
-  note?: string;
+  descKey: I18nKey;
 }[] = [
   {
     agent: "claude-code",
     name: "Claude Code",
-    desc: "写入 ~/.claude.json 的 mcpServers 配置，新会话生效",
+    descKey: "settings.connector.desc.claude-code",
   },
   {
     agent: "codex",
     name: "Codex",
-    desc: "写入 ~/.codex/config.toml 的 [mcp_servers.journal] 配置段，新会话生效",
+    descKey: "settings.connector.desc.codex",
   },
   {
     agent: "hermes",
     name: "Hermes",
-    desc: "写入 ~/.hermes/config.yaml 的 mcp_servers.journal 节点，新会话生效",
+    descKey: "settings.connector.desc.hermes",
   },
   {
     agent: "joycode",
     name: "JoyCode",
-    desc: "写入 ~/.joycode/joycode-mcp.json 的 mcpServers 配置，新会话生效",
+    descKey: "settings.connector.desc.joycode",
   },
   {
     agent: "workbuddy",
     name: "WorkBuddy",
-    desc: "写入 ~/.workbuddy/mcp.json 的 mcpServers 配置，需在 WorkBuddy 的「连接器管理 → 自定义连接器」中信任该服务，信任后新会话生效",
+    descKey: "settings.connector.desc.workbuddy",
   },
 ];
 
@@ -1501,6 +1551,7 @@ const CONNECTORS: {
  *  letting agent sessions read the current project's shared memories via MCP tools
  *  (recall_memories / list_projects). One card per connection: status + toggle. */
 function ConnectorsPane({ onNotify }: { onNotify: Notify }) {
+  const { t } = useI18n();
   /** Per-agent binding status; undefined = still loading. */
   const [bound, setBound] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState<string | null>(null);
@@ -1511,7 +1562,7 @@ function ConnectorsPane({ onNotify }: { onNotify: Notify }) {
         .mcpStatus(c.agent)
         .then((b) => setBound((prev) => ({ ...prev, [c.agent]: b })))
         .catch((e) =>
-          onNotify(`读取连接状态失败: ${e?.message ?? e}`, "error"),
+          onNotify(t("settings.connector.statusFailed", String(e?.message ?? e)), "error"),
         );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1526,7 +1577,7 @@ function ConnectorsPane({ onNotify }: { onNotify: Notify }) {
       const boundNow = await api.mcpStatus(c.agent);
       setBound((prev) => ({ ...prev, [c.agent]: boundNow }));
     } catch (e: any) {
-      onNotify(`操作失败: ${e?.message ?? e}`, "error");
+      onNotify(t("settings.connector.actionFailed", String(e?.message ?? e)), "error");
     } finally {
       setBusy(null);
     }
@@ -1545,10 +1596,10 @@ function ConnectorsPane({ onNotify }: { onNotify: Notify }) {
                 className="m-0 shrink-0"
                 color={bound[c.agent] ? "green" : "default"}
               >
-                {bound[c.agent] ? "已绑定" : "未绑定"}
+                {bound[c.agent] ? t("settings.connector.bound") : t("settings.connector.unbound")}
               </Tag>
             </div>
-            <div className="mt-0.5 text-xs text-muted">{c.desc}</div>
+            <div className="mt-0.5 text-xs text-muted">{t(c.descKey)}</div>
           </div>
           <Switch
             checked={!!bound[c.agent]}
@@ -1567,6 +1618,7 @@ const FEEDBACK_URL = `${GITHUB_URL}/issues/new`;
 /** "About" pane: app icon, name and version, a feedback button, and a footer
  *  with the repo link + copyright (aligned with manta-compare's about page). */
 function AboutPane() {
+  const { t } = useI18n();
   return (
     // min-h-full + justify-center: the whole block (content + footer, original
     // spacing) centers vertically in the scroll area.
@@ -1585,7 +1637,7 @@ function AboutPane() {
           className="mt-2"
           onClick={() => void api.openExternal(FEEDBACK_URL)}
         >
-          反馈问题
+          {t("settings.about.feedback")}
         </Button>
       </div>
 

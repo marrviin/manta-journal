@@ -1,4 +1,5 @@
 import type { Static } from '@sinclair/typebox';
+import { tReq } from '../i18n';
 import type { FastifyInstance } from 'fastify';
 
 import {
@@ -19,9 +20,9 @@ export default async function factRoutes(app: FastifyInstance): Promise<void> {
     { schema: { body: ManualFactBody, response: { 200: IngestResponse }, operationId: 'addFact' } },
     async (req) => {
       const projectId = req.body.projectId.trim();
-      if (!projectId) throw app.httpErrors.badRequest('projectId 不能为空');
+      if (!projectId) throw app.httpErrors.badRequest(tReq('err.projectIdRequired'));
       const content = req.body.content.trim();
-      if (!content) throw app.httpErrors.badRequest('记忆内容不能为空');
+      if (!content) throw app.httpErrors.badRequest(tReq('err.contentRequired'));
       return app.core.addManualMemory(projectId, content);
     },
   );
@@ -31,7 +32,7 @@ export default async function factRoutes(app: FastifyInstance): Promise<void> {
     { schema: { params: IdParams, body: FactUpdateBody, response: { 200: OkResponse }, operationId: 'updateFact' } },
     async (req) => {
       const content = req.body.content.trim();
-      if (!content) throw app.httpErrors.badRequest('记忆内容不能为空');
+      if (!content) throw app.httpErrors.badRequest(tReq('err.contentRequired'));
       await app.core.updateFact(req.params.id, content);
       return { ok: true };
     },
@@ -59,7 +60,7 @@ export default async function factRoutes(app: FastifyInstance): Promise<void> {
     { schema: { params: ProjectIdParams, querystring: CountQuery, response: { 200: CountResponse }, operationId: 'countFacts' } },
     async (req) => {
       const agent = (req.query.agent ?? '').trim();
-      if (!agent) throw app.httpErrors.badRequest('agent 参数不能为空');
+      if (!agent) throw app.httpErrors.badRequest(tReq('err.agentRequired'));
       return { count: await app.core.countByAgent(req.params.projectId, agent) };
     },
   );

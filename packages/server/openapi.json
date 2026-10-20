@@ -1295,6 +1295,62 @@
           }
         }
       }
+    },
+    "/settings/language": {
+      "put": {
+        "operationId": "setLanguage",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "lang"
+                ],
+                "properties": {
+                  "lang": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "zh"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "enum": [
+                          "en"
+                        ]
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "servers": []

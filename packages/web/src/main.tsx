@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './app';
+import { AppProviders } from './theme';
 import { SettingsWindow } from './settings-window';
 import { JournalBookWindow } from './journal-book';
 import './styles.css';
@@ -27,6 +28,7 @@ const windowKind = new URLSearchParams(window.location.search).get('window');
 if (windowKind) document.documentElement.dataset.window = windowKind;
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
+  <AppProviders>
   <React.StrictMode>
     {windowKind === 'settings' ? (
       <SettingsWindow />
@@ -36,4 +38,5 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
       <App />
     )}
   </React.StrictMode>,
+  </AppProviders>,
 );

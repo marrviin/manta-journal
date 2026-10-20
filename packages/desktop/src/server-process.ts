@@ -18,6 +18,8 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import net from 'node:net';
+
+import { tMain } from './i18n';
 import path from 'node:path';
 
 import { log } from './log';
@@ -80,7 +82,7 @@ async function waitHealthy(port: number, token: string, timeoutMs: number): Prom
   const deadline = Date.now() + timeoutMs;
   let lastErr = '';
   while (Date.now() < deadline) {
-    if (stopping) throw new Error('应用正在退出，记忆服务启动已取消');
+    if (stopping) throw new Error(tMain('err.quitting'));
     try {
       const resp = await fetch(`http://127.0.0.1:${port}/health`, {
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
@@ -93,7 +95,7 @@ async function waitHealthy(port: number, token: string, timeoutMs: number): Prom
     }
     await new Promise((r) => setTimeout(r, 300));
   }
-  throw new Error(`本地记忆服务启动超时（${lastErr || '无响应'}）`);
+  throw new Error(tMain('err.serverTimeout', lastErr || 'no response'));
 }
 
 /** Spawn (or reuse) the local memory-server child. Throws with a user-actionable
@@ -107,7 +109,7 @@ export async function ensureServerProcess(opts: {
   }
   const entry = resolveServerEntry();
   if (!entry) {
-    throw new Error('未找到记忆服务 bundle（dist-server/index.cjs）— 请先运行 pnpm build:server');
+    throw new Error(tMain('err.serverBundleMissing'));
   }
   const port = await findFreePort();
   const token = crypto.randomBytes(24).toString('hex');

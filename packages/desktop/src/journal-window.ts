@@ -9,12 +9,20 @@
 import { BrowserWindow } from 'electron';
 import path from 'node:path';
 
+import { tMain } from './i18n';
+
 let journalWin: BrowserWindow | null = null;
 
 /** Close the book window if it's up (the main window calls this on focus:
  * clicking back into the app shell dismisses the floating book). */
 export function closeJournalWindow(): void {
   if (journalWin && !journalWin.isDestroyed()) journalWin.close();
+}
+
+/** Re-localize the book window's title after a language switch (no-op when
+ *  the window is closed — the next createOrShow reads the fresh language). */
+export function refreshJournalWindowTitle(): void {
+  if (journalWin && !journalWin.isDestroyed()) journalWin.setTitle(tMain('win.journal'));
 }
 
 /** Create (or focus + retarget) the singleton journal-book window. */
@@ -35,7 +43,7 @@ export function createOrShowJournalWindow(project: string, date: string): void {
     height: 740,
     resizable: false,
     fullscreenable: false,
-    title: '日记本',
+    title: tMain('win.journal'),
     show: false,
     // Transparent window: only the book floats over the user's desktop — the
     // desk backdrop lives in CSS (.jnb-desk) and must stay see-through too.

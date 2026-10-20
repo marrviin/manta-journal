@@ -419,3 +419,23 @@ export type SavePersonalizationResponses = {
 };
 
 export type SavePersonalizationResponse = SavePersonalizationResponses[keyof SavePersonalizationResponses];
+
+export type SetLanguageData = {
+    body: {
+        lang: 'zh' | 'en';
+    };
+    path?: never;
+    query?: never;
+    url: '/settings/language';
+};
+
+export type SetLanguageResponses = {
+    /**
+     * Default Response
+     */
+    200: {
+        ok: boolean;
+    };
+};
+
+export type SetLanguageResponse = SetLanguageResponses[keyof SetLanguageResponses];

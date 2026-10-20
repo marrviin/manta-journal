@@ -4,7 +4,7 @@
 //! those checks keep the Chinese error strings the desktop client surfaces.
 
 import { Type } from '@sinclair/typebox';
-import { SBTI_TYPES } from '@journal/shared';
+import { SBTI_TYPES } from '@manta-journal/shared';
 
 /** POST /ingest */
 export const IngestBody = Type.Object({
@@ -172,4 +172,10 @@ export const PersonalizationBody = Type.Object({
 export const PersonalizationResponse = Type.Object({
   displayName: Type.String(),
   personality: PersonalityIdSchema,
+});
+
+/** PUT /settings/language — UI language of the connected display layer, pushed
+ *  on every settings-window switch; drives the journal scheduler's output. */
+export const LanguageBody = Type.Object({
+  lang: Type.Union([Type.Literal('zh'), Type.Literal('en')]),
 });

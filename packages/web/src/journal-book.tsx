@@ -19,7 +19,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import { Spin } from "antd";
 
-import { ThemeProviders } from "./theme";
+import { AppProviders } from "./theme";
+import { useI18n } from "./i18n";
 import * as api from "./api";
 import type { JournalEntry } from "./types";
 import { JournalMd } from "./journal-md";
@@ -66,13 +67,14 @@ function Desk({ children }: { children: ReactNode }) {
 
 export function JournalBookWindow() {
   return (
-    <ThemeProviders>
+    <AppProviders>
       <BookRoot />
-    </ThemeProviders>
+    </AppProviders>
   );
 }
 
 function BookRoot() {
+  const { t } = useI18n();
   // Window URL carries the initial project + day (set by the BrowserWindow)
   const initial = useMemo(
     () => new URLSearchParams(window.location.search),
@@ -129,7 +131,7 @@ function BookRoot() {
   if (error)
     return (
       <Desk>
-        <p className="jnb-note">日记加载失败：{error}</p>
+        <p className="jnb-note">{t("journal.loadFailedShort", error)}</p>
       </Desk>
     );
   if (!entries)
@@ -141,7 +143,7 @@ function BookRoot() {
   if (entries.length === 0)
     return (
       <Desk>
-        <p className="jnb-note">这个项目还没有日记</p>
+        <p className="jnb-note">{t("journal.bookEmpty")}</p>
       </Desk>
     );
   return (

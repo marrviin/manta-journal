@@ -287,7 +287,7 @@ describe('handleJsonRpc initialize', () => {
     });
     const init = r.result as { protocolVersion: string; serverInfo: { name: string }; instructions: string };
     expect(init.protocolVersion).toBe('2025-06-18');
-    expect(init.serverInfo.name).toBe('journal');
+    expect(init.serverInfo.name).toBe('manta-journal');
     expect(init.instructions).toContain('recall_memories');
   });
 });
@@ -305,7 +305,7 @@ describe('HTTP MCP server', () => {
         });
 
       const init = await (await post({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18' } })).json() as any;
-      expect(init.result.serverInfo.name).toBe('journal');
+      expect(init.result.serverInfo.name).toBe('manta-journal');
       // Echo the client's requested protocol version so negotiation succeeds.
       expect(init.result.protocolVersion).toBe('2025-06-18');
 

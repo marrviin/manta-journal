@@ -8,13 +8,14 @@
  *  MCP injection, watch rules, import events). */
 
 import { client } from './client/client.gen';
+import { currentLang } from './i18n-lang';
 
 export interface MemoryEndpoint {
   base: string;
   token: string | null;
 }
 
-/** Configured endpoint, null until bootstrap — callers surface the Chinese
+/** Configured endpoint, null until bootstrap — callers surface the localized
  *  "memory service unavailable" message rather than firing requests into the
  *  void. */
 let endpoint: MemoryEndpoint | null = null;
@@ -22,12 +23,14 @@ let endpoint: MemoryEndpoint | null = null;
 /** Point the generated client at a service instance. Idempotent; call once at
  *  renderer startup (desktop) or after the user saves connection settings (web).
  *  The interceptor adds the bearer header only when a token exists — local
- *  loopback mode runs without auth. */
+ *  loopback mode runs without auth — and the UI language on every request so
+ *  server-side error strings come back localized. */
 export function setMemoryEndpoint(next: MemoryEndpoint): void {
   endpoint = next;
   client.setConfig({ baseUrl: next.base });
   client.interceptors.request.use((request) => {
     if (next.token) request.headers.set('Authorization', `Bearer ${next.token}`);
+    request.headers.set('X-App-Language', currentLang());
     return request;
   });
 }

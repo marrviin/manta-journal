@@ -2,7 +2,7 @@
 
 import type { Client, Options as Options2, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddFactData, AddFactResponses, CountFactsData, CountFactsResponses, DeleteFactData, DeleteFactResponses, GenerateJournalsData, GenerateJournalsResponses, GetHealthData, GetHealthResponses, GetJournalPendingData, GetJournalPendingResponses, GetPersonalizationData, GetPersonalizationResponses, IngestFactsData, IngestFactsResponses, ListFactsData, ListFactsResponses, ListJournalsData, ListJournalsResponses, ListProjectsData, ListProjectsResponses, RegenerateJournalsData, RegenerateJournalsResponses, RegisterProjectData, RegisterProjectResponses, RemoveProjectData, RemoveProjectResponses, SavePersonalizationData, SavePersonalizationResponses, SearchMemoriesData, SearchMemoriesResponses, UpdateFactData, UpdateFactResponses } from './types.gen';
+import type { AddFactData, AddFactResponses, CountFactsData, CountFactsResponses, DeleteFactData, DeleteFactResponses, GenerateJournalsData, GenerateJournalsResponses, GetHealthData, GetHealthResponses, GetJournalPendingData, GetJournalPendingResponses, GetPersonalizationData, GetPersonalizationResponses, IngestFactsData, IngestFactsResponses, ListFactsData, ListFactsResponses, ListJournalsData, ListJournalsResponses, ListProjectsData, ListProjectsResponses, RegenerateJournalsData, RegenerateJournalsResponses, RegisterProjectData, RegisterProjectResponses, RemoveProjectData, RemoveProjectResponses, SavePersonalizationData, SavePersonalizationResponses, SearchMemoriesData, SearchMemoriesResponses, SetLanguageData, SetLanguageResponses, UpdateFactData, UpdateFactResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean> = Options2<TData, ThrowOnError> & {
     /**
@@ -101,6 +101,15 @@ export const getPersonalization = <ThrowOnError extends boolean = false>(options
 
 export const savePersonalization = <ThrowOnError extends boolean = false>(options: Options<SavePersonalizationData, ThrowOnError>) => (options.client ?? client).put<SavePersonalizationResponses, unknown, ThrowOnError>({
     url: '/settings/personalization',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const setLanguage = <ThrowOnError extends boolean = false>(options: Options<SetLanguageData, ThrowOnError>) => (options.client ?? client).put<SetLanguageResponses, unknown, ThrowOnError>({
+    url: '/settings/language',
     ...options,
     headers: {
         'Content-Type': 'application/json',

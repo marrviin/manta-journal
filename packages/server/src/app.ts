@@ -39,6 +39,7 @@ import swaggerUi from '@fastify/swagger-ui';
 
 import type { ServerConfig } from './config';
 import { realCore, type CoreApi } from './core';
+import { registerRequestLanguage } from './i18n';
 import bearerAuth from './plugins/auth';
 import healthRoutes from './routes/health';
 import ingestRoutes from './routes/ingest';
@@ -58,6 +59,9 @@ export function buildApp(cfg: ServerConfig, coreApi: CoreApi = realCore(cfg)): F
 
   app.decorate('cfg', cfg);
   app.decorate('core', coreApi);
+  // Request-scoped UI language (X-App-Language header) for tReq() — the
+  // AsyncLocalStorage scope covers every downstream await of the request.
+  registerRequestLanguage(app);
   app.register(sensible);
   // Renderer-direct HTTP is the contract for the display layer (desktop webview
   // today, browser build later) — CORS keeps that reachable from a page origin.

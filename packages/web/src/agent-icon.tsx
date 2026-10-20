@@ -16,6 +16,7 @@ import codexSvg from './assets/agents/codex.svg';
 import hermesSvg from './assets/agents/hermes.svg';
 import joycodePng from './assets/agents/joycode.png';
 import workbuddyPng from './assets/agents/workbuddy.png';
+import { t, type Lang } from '@manta-journal/shared';
 
 const AGENT_ICONS: Record<string, { src?: string; color: string; glyph: string }> = {
   'claude-code': { src: claudeSvg, color: '#d97757', glyph: '✳' },
@@ -28,6 +29,23 @@ const AGENT_ICONS: Record<string, { src?: string; color: string; glyph: string }
 };
 
 const FALLBACK_COLOR = '#8e8e93';
+
+/** Agent display names, shared by the memory list metadata and the watch cards
+ *  (记忆管理). Keys are the canonical agent ids — the same ids the connectors
+ *  pane uses; unknown ids (custom watch cards) fall through to the raw id.
+ *  Brand names are language-neutral; only the two non-brand agents localize. */
+export function agentLabel(lang: Lang, agent: string): string {
+  const key = agent === 'myagent' || agent === 'user' ? (`agent.${agent}` as const) : null;
+  return key ? t(lang, key) : AGENT_LABELS[agent] ?? agent;
+}
+
+const AGENT_LABELS: Record<string, string> = {
+  'claude-code': 'Claude Code',
+  joycode: 'JoyCode',
+  codex: 'Codex',
+  hermes: 'Hermes',
+  workbuddy: 'WorkBuddy',
+};
 
 export function AgentIcon({ agent, size = 20 }: { agent: string; size?: number }) {
   const icon = AGENT_ICONS[agent];

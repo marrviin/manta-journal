@@ -18,6 +18,7 @@
 //!   dbPath); no Qdrant needed.
 
 import fs from 'node:fs';
+import { tReq } from '../i18n';
 import path from 'node:path';
 import { Memory, type MemoryConfig } from 'mem0ai/oss';
 
@@ -31,7 +32,7 @@ import {
   type FactItem,
   type IngestReport,
   type SemanticHit,
-} from '@journal/shared';
+} from '@manta-journal/shared';
 
 /** Ingestion behavior tuning: keep the original language, no meta info, correct old memories on conflict */
 const CUSTOM_INSTRUCTIONS =
@@ -79,7 +80,7 @@ export async function ensureMemory(cfg: LlmConfig | null, dataDir: string): Prom
       // Vectors always come from the local /embeddings side-server (bundled model).
       const modelDir = resolveLocalModelDir();
       if (!modelDir) {
-        throw new Error('未找到内置 embedding 模型（models/bge-small-zh-v1.5）— 请重新构建 @journal/server');
+        throw new Error(tReq('err.embedModelMissing'));
       }
       newShim = await startLocalEmbedder(modelDir);
       const embedder: MemoryConfig['embedder'] = {
@@ -159,7 +160,7 @@ async function embedTexts(cfg: LlmConfig | null, shimPort: number | null, texts:
   if (!resp.ok) throw new Error(`embeddings HTTP ${resp.status}`);
   const j = (await resp.json()) as { data?: { index: number; embedding: number[] }[] };
   const rows = [...(j.data ?? [])].sort((a, b) => a.index - b.index);
-  if (rows.length !== texts.length) throw new Error(`embeddings 返回 ${rows.length}/${texts.length} 条`);
+  if (rows.length !== texts.length) throw new Error(tReq('err.embedRowMismatch', rows.length, texts.length));
   return rows.map((r) => r.embedding);
 }
 
@@ -271,7 +272,7 @@ export async function ingest(
   sourceMtime?: number,
 ): Promise<{ report: IngestReport; facts: FactItem[] }> {
   const m = await ensureMemory(cfg, dataDir);
-  if (!m) return { report: { added: 0, updated: 0, deleted: 0, notice: '记忆库未配置' }, facts: [] };
+  if (!m) return { report: { added: 0, updated: 0, deleted: 0, notice: tReq('notice.memoryStoreUnconfigured') }, facts: [] };
 
   // Any write path registers the project lazily (bare path segments make a
   // reasonable display name; explicit names come through ensureProject callers).
@@ -351,7 +352,7 @@ export function addManualMemory(
  *  the client only updates its mirror after this succeeds. */
 export async function updateFact(cfg: LlmConfig | null, dataDir: string, memoryId: string, content: string): Promise<void> {
   const m = await ensureMemory(cfg, dataDir);
-  if (!m) throw new Error('记忆服务未配置，无法更新记忆');
+  if (!m) throw new Error(tReq('err.memoryNotConfiguredUpdate'));
   await withTimeout(m.update(memoryId, { text: content }), ADD_TIMEOUT_MS, '更新记忆');
   store.stampUpdated(dataDir, [memoryId], Date.now());
 }
@@ -468,7 +469,7 @@ export async function registerProject(
   projectId: string,
   name?: string,
 ): Promise<{ id: string; name: string; factCount: number; lastUpdated: number | null }> {
-  if (!projectId.trim()) throw new Error('projectId 不能为空');
+  if (!projectId.trim()) throw new Error(tReq('err.projectIdRequired'));
   store.ensureProject(dataDir, projectId.trim(), name);
   const m = await ensureMemory(cfg, dataDir);
   let factCount = 0;
@@ -491,7 +492,7 @@ export async function registerProject(
  *  the registry row. The virtual global project is not removable. */
 export async function removeProject(cfg: LlmConfig | null, dataDir: string, projectId: string): Promise<void> {
   if (projectId === store.GLOBAL_PROJECT) {
-    throw new Error('全局记忆项目不可删除');
+    throw new Error(tReq('err.globalNotRemovable'));
   }
   const m = await ensureMemory(cfg, dataDir);
   if (m) {

@@ -14,7 +14,8 @@ import * as store from './store';
 import * as settings from './settings';
 import { log } from './log';
 import { ensureServerProcess, isServerRunning, stopServer } from './server-process';
-import type { FactItem, IngestReport, SemanticHit } from '@journal/shared';
+import type { FactItem, IngestReport, SemanticHit } from '@manta-journal/shared';
+import { tMain } from './i18n';
 
 // Shared contracts — re-exported so ipc.ts / watcher.ts / mcp-server.ts keep
 // importing them from this module.
@@ -54,8 +55,8 @@ const QUERY_TIMEOUT_MS = 60_000;
 /** User-facing error text: distinguish the two modes so the fix is obvious. */
 function unreachableMessage(kind: 'local' | 'remote', base: string): string {
   return kind === 'local'
-    ? '本地记忆服务不可达，请重启应用重试'
-    : `远程记忆服务不可达（${base}），请检查服务地址或部署状态`;
+    ? tMain('mem0.unreachableLocal')
+    : tMain('mem0.unreachableRemote', base);
 }
 
 async function healthCheck(base: string, token: string | null): Promise<HealthInfo> {
@@ -169,7 +170,7 @@ interface ApiInit {
  *  throw with the server's message — callers decide whether to surface a notice
  *  (ingest, retried by the watcher) or propagate (manual edits via IPC). */
 async function api<T>(path: string, init: ApiInit = {}): Promise<T> {
-  if (!conn) throw new Error('记忆服务未连接（未启用或未配置）');
+  if (!conn) throw new Error(tMain('err.memoryNotConnected'));
   const c = conn;
   let resp: Response;
   try {
@@ -186,7 +187,7 @@ async function api<T>(path: string, init: ApiInit = {}): Promise<T> {
     throw new Error(unreachableMessage(c.kind, c.base));
   }
   const j = (await resp.json().catch(() => ({}))) as { message?: string } & Record<string, unknown>;
-  if (!resp.ok) throw new Error(j.message ?? `记忆服务 HTTP ${resp.status}`);
+  if (!resp.ok) throw new Error(j.message ?? tMain('mem0.http', String(resp.status)));
   return j as T;
 }
 
@@ -237,7 +238,7 @@ export async function ingest(
   } catch (e) {
     console.error('[Journal mem0] 记忆服务初始化失败:', e);
     log(`mem0.ingest: 记忆服务初始化失败: ${e}`);
-    return { added: 0, updated: 0, deleted: 0, notice: '记忆服务初始化失败，本批记忆未入库' };
+    return { added: 0, updated: 0, deleted: 0, notice: tMain('notice.initFailed') };
   }
   if (!m) return { added: 0, updated: 0, deleted: 0 };
 
@@ -261,7 +262,7 @@ export async function ingest(
   } catch (e) {
     console.error('[Journal mem0] 洗入失败:', e);
     log(`mem0.ingest: /ingest 失败: ${e}`);
-    return { added: 0, updated: 0, deleted: 0, notice: `记忆入库失败（${String(e)}），本批记忆未入库` };
+    return { added: 0, updated: 0, deleted: 0, notice: tMain('notice.ingestFailedArg', String(e)) };
   }
 }
 
@@ -284,7 +285,7 @@ export async function updateMemory(
   content: string,
 ): Promise<void> {
   const m = (await ensureMemory(userDataDir).catch(() => conn)) ?? conn;
-  if (!m) throw new Error('记忆服务未配置，无法更新记忆');
+  if (!m) throw new Error(tMain('err.memoryNotConfiguredUpdate'));
   await api<{ ok: boolean }>(`/facts/${encodeURIComponent(memoryId)}`, {
     method: 'PUT',
     body: { content },

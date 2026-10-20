@@ -4,7 +4,7 @@
 //! and editing one section leaves every other chunk untouched.
 
 import { describe, expect, it } from 'vitest';
-import { splitMemoryChunks } from '@journal/shared';
+import { splitMemoryChunks } from '@manta-journal/shared';
 
 const bullet = (name: string, size: number) =>
   `- ${name}: ${'内容'.repeat(Math.ceil(size / 2))}`.slice(0, size);

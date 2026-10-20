@@ -9,11 +9,11 @@
 import path from 'node:path';
 import fs from 'node:fs';
 
-import type { FactItem } from '@journal/shared';
+import type { FactItem } from '@manta-journal/shared';
 
 import type { LlmConfig } from '../config';
 import { chatCompletion } from '../llm-chat';
-import { SBTI_TYPES } from '@journal/shared';
+import { SBTI_TYPES, normalizeLang, type Lang } from '@manta-journal/shared';
 import { deleteJournalFilesBefore, journalDates, writeJournalFile } from '../journal-fs';
 import * as store from '../store';
 import { listFacts } from './memory-core';
@@ -28,7 +28,8 @@ const MAX_FACT_CHARS = 600;
  *  multi-day backfill from crawling while staying polite to the endpoint. */
 const JOURNAL_CONCURRENCY = 3;
 
-const SYSTEM_PROMPT = `你是「Journal」的实验日志代笔：根据某项目某天的记忆条目，代写这个项目里 AI 工程师当天的日记（markdown）。
+const SYSTEM_PROMPT: Record<Lang, string> = {
+  zh: `你是「Journal」的实验日志代笔：根据某项目某天的记忆条目，代写这个项目里 AI 工程师当天的日记（markdown）。
 
 你是这个项目里的 AI 工程师，和一位人类同事长期结对、平等搭档。这是你**自己的工作日记**——下班前随手记的，不是汇报，假设没人看。"我"永远是这位 AI 同事，{PEER}；可以像老搭档一样小声嘀咕（"搭档今天又推翻了自己早上的方案"），不谄媚不刻薄，绝没有"作为一个 AI"的腔调，不提自己是模型或工具。{PERSONA}
 
@@ -48,7 +49,29 @@ const SYSTEM_PROMPT = `你是「Journal」的实验日志代笔：根据某项�
 - **加粗**：一篇最多一两处，以词或小短语为限
 - 涂掉和圈住的词必须出自当天条目；写完遮住所有符号读一遍，通顺才算合格——没有痕迹也是好日记
 
-只输出日志正文本身，不要任何解释、前缀或代码围栏。`;
+只输出日志正文本身，不要任何解释、前缀或代码围栏。`,
+  en: `You ghostwrite "Journal"'s lab log: from a project's memory entries for one day, write that day's diary (markdown) for the AI engineer working in this project.
+
+You are the AI engineer in this project, paired long-term as an equal with one human colleague. This is **your own work diary** — jotted down before leaving, not a report; assume nobody reads it. "I" is always the AI colleague, {PEER}; you may mutter under your breath like an old partner ("my partner overturned their own morning plan again today"), never sycophantic, never cruel, absolutely no "as an AI" voice, no mention of being a model or a tool. {PERSONA}
+
+What to write:
+- 150–300 words, one or two paragraphs, stream of thought; no subheadings, avoid lists
+- Grab only the day's one or two most important threads: events get three or four sentences max, and the rest of the budget goes to inner monologue and partner interaction — the entries only record what was done; the diary is about what you were thinking, how it felt, how you sparred with your partner. Invent that part boldly; it need not come from the entries
+- Emotions and thoughts take most of the space: what you were scheming, why you judged that way, what you feared, the frustration of being stuck, the smugness of a fix, the reluctance of being interrupted — events are only the trigger. Write along the process (where it jammed, the moment it clicked), never summarize by topic; no lyricism, no slogans
+- The partner is the other lead: what they did, what traps they threw, which sentence of theirs unblocked you, who won the standoff — praise must cite specifics, gripes carry affection without a barb; let them appear naturally inside the events, don't orbit them in every sentence
+- Colloquial fragments and half-sentences are fine ("no idea why it just worked"); never "First / Second / In conclusion," never a closing "today's lesson"; the English must sound spoken, not translated — reject translationese constructions, and don't fake prose with semicolon lists ("three fronts: A; B; C" is a changelog in disguise — break it into sentences or drop it)
+- Numbers, paths and names: keep only the one or two that hold the thread together (the entries are the source); for the rest write "that old pit" or "some config"; leave blank what the entries don't mention — never invent
+- Openings and endings follow the day's events; no fixed opener — an exclamation like "oh no" looks different in every entry, never stamp the same phrasing twice; each piece is an independent offhand note
+
+Handwritten marks — by default use NONE of them; every mark must earn its place ("without this stroke the sentence falls flat"), and never stack two kinds together:
+- ~~struck~~: you wrote it wrong or doubled it — strike it and follow immediately with the corrected wording ("rate limit ~~100~~ 50"; "the cause was me being ~~dumb~~ half-asleep"). A witty line, self-mockery or a good metaphor that lands: just say it, don't strike it — striking a perfectly fine sentence to fake a second thought is the most revealing performance of all
+- ==circled==: signposts for your future self — a settled conclusion, a parameter to watch, a debt owed; the circled words grow inside a finished sentence ("the undo window falls back to ==60s==, observe for a week"). Not a highlighter: don't circle bare technical nouns, don't append an explanation after circling. At most one per entry; most days none
+- ^inserted^: a missing word, patched outside the line with a caret ("tests all green^finally^, can ship"), word-level fragments only
+- **bold**: at most one or two per entry, limited to a word or a small phrase
+- Struck and circled words must come from that day's entries; when done, cover every mark and reread — it only passes if it flows. An entry with no marks is a good diary too
+
+Output the log body only — no explanation, prefix or code fences.`,
+};
 
 export interface JournalPending {
   projectId: string;
@@ -59,16 +82,28 @@ export interface JournalPending {
 
 /** The identity line adapts to the user's personalization settings: 称呼 unset →
  *  the human colleague is just "搭档", set → addressed by name; 性格 unset → the
- *  writer's default voice, set → SBTI persona flavors the language and mood. */
-function systemPrompt(displayName: string, personalityId: string): string {
-  const peer = displayName.trim()
-    ? `日记里直接用「${displayName.trim()}」称呼那位人类同事，不用"搭档"`
-    : '那位人类同事写"搭档"';
+ *  writer's default voice, set → SBTI persona flavors the language and mood.
+ *  Everything (including the SBTI persona material) follows the requested lang. */
+function systemPrompt(lang: Lang, displayName: string, personalityId: string): string {
+  const name = displayName.trim();
+  const peer =
+    lang === 'en'
+      ? name
+        ? `Address the human colleague directly as "${name}" in the diary, not "my partner"`
+        : 'Refer to the human colleague as "my partner"'
+      : name
+        ? `日记里直接用「${name}」称呼那位人类同事，不用"搭档"`
+        : '那位人类同事写"搭档"';
   const t = SBTI_TYPES.find((x) => x.id === personalityId);
-  const persona = t
-    ? ` 你的性格是「${t.name}」（SBTI ${t.code}）。关键特质：${t.traits.join('；')}。性格速写（不是资料，是你自己）：${t.trait} 用第一人称把这些活成底色——情绪基调、看事情的角度、自嘲和吐槽的方式都从这里来，从第一句贯到结尾，熟悉你的人不看署名也该认得出是你写的。但这是工作日记不是演小品：性格点到为止，别每句都在演，口癖一篇最多一两处；事实和主线照旧，性格长在它们上面。`
-    : '';
-  return SYSTEM_PROMPT.replace('{PEER}', peer).replace('{PERSONA}', persona);
+  let persona = '';
+  if (t) {
+    const c = lang === 'en' ? t.en : t.zh;
+    persona =
+      lang === 'en'
+        ? ` Your personality is "${c.name}" (SBTI ${t.code}). Key traits: ${c.traits.join('; ')}. Personality sketch (not a dossier — it is you): ${c.trait} Live these as your base tone in the first person — the emotional keynote, the way you see things, how you self-mock and gripe all come from here, running from the first sentence to the last; someone familiar with you should recognize the handwriting without a signature. But this is a work diary, not a skit: let the personality show in passing, don't perform it in every sentence, and cap the verbal tics at one or two per entry; facts and the main thread stay as they are — the personality grows on top of them.`
+        : ` 你的性格是「${c.name}」（SBTI ${t.code}）。关键特质：${c.traits.join('；')}。性格速写（不是资料，是你自己）：${c.trait} 用第一人称把这些活成底色——情绪基调、看事情的角度、自嘲和吐槽的方式都从这里来，从第一句贯到结尾，熟悉你的人不看署名也该认得出是你写的。但这是工作日记不是演小品：性格点到为止，别每句都在演，口癖一篇最多一两处；事实和主线照旧，性格长在它们上面。`;
+  }
+  return SYSTEM_PROMPT[lang].replace('{PEER}', peer).replace('{PERSONA}', persona);
 }
 
 export interface JournalGenResult {
@@ -125,19 +160,27 @@ export async function planMissingJournals(
 /** Generate every missing past-date journal across all registered projects.
  *  Single-flight: an in-progress pass makes later ticks no-ops (they'll pick
  *  up whatever is still missing next time). Entries are independent — tasks
- *  run through a small pool (JOURNAL_CONCURRENCY), oldest dates first. */
+ *  run through a small pool (JOURNAL_CONCURRENCY), oldest dates first.
+ *  `lang` is the diary output language: the display layer passes its UI
+ *  language on request-driven generates; the hourly scheduler resolves it
+ *  from the stored journal_language setting. */
 export async function generateMissingJournals(
   cfg: LlmConfig | null,
   dataDir: string,
   onlyProjectId?: string,
+  lang?: Lang,
 ): Promise<JournalGenResult[]> {
   if (!cfg?.apiKey || running) return [];
   running = true;
   try {
     const plan = await planMissingJournals(cfg, dataDir, onlyProjectId);
     const out: JournalGenResult[] = [];
+    // Diary language: the caller's override wins (request-driven), else the
+    // display layer's pushed setting (the hourly scheduler's path).
+    const effLang = lang ?? storedLang(dataDir);
     // 个性化设置每轮重读：称呼 / 性格变更即刻在下一次生成生效，无需重启。
     const prompt = systemPrompt(
+      effLang,
       store.getSetting(dataDir, store.USER_DISPLAY_NAME) ?? '',
       store.getSetting(dataDir, store.PARTNER_PERSONALITY) ?? '',
     );
@@ -155,7 +198,7 @@ export async function generateMissingJournals(
             const entry = await chatCompletion(
               cfg,
               prompt,
-              buildUserPrompt(p.projectId, date, dayFacts),
+              buildUserPrompt(effLang, p.projectId, date, dayFacts),
             );
             // 圈注出处的判定语料：当天全部条目原文（去空白）
             const factCorpus = dayFacts.map((f) => f.memory).join('').replace(/\s+/g, '');
@@ -189,6 +232,12 @@ async function runPool(tasks: (() => Promise<void>)[], limit: number): Promise<v
   await Promise.all(workers);
 }
 
+/** Diary language outside a request (the hourly scheduler): the display layer
+ *  pushes its UI language into the store on every settings switch; default zh. */
+function storedLang(dataDir: string): Lang {
+  return normalizeLang(store.getSetting(dataDir, store.JOURNAL_LANGUAGE));
+}
+
 /** Debug entry: drop the project's past-date journals, then regenerate them in
  *  a fresh pass — writeJournalFile's create-if-missing guard is why the delete
  *  has to come first. Today's file is kept (the writer never owns today). */
@@ -196,12 +245,13 @@ export async function regenerateJournals(
   cfg: LlmConfig | null,
   dataDir: string,
   projectId: string,
+  lang?: Lang,
 ): Promise<JournalGenResult[]> {
   const deleted = deleteJournalFilesBefore(projectId, store.localDate(Date.now()));
   console.log(
     `[Journal server] journal: 重新生成 ${projectId} — 已删除 ${deleted.length} 天（${deleted.join('、') || '无'}）`,
   );
-  return generateMissingJournals(cfg, dataDir, projectId);
+  return generateMissingJournals(cfg, dataDir, projectId, lang);
 }
 
 /** Startup + hourly check loop. */
@@ -211,7 +261,7 @@ export function startJournalScheduler(cfg: LlmConfig | null, dataDir: string): v
     return;
   }
   const tick = () => {
-    void generateMissingJournals(cfg, dataDir)
+    void generateMissingJournals(cfg, dataDir, undefined, storedLang(dataDir))
       .then((r) => {
         const failed = r.filter((x) => !x.ok).length;
         if (r.length) console.log(`[Journal server] journal: 本轮生成 ${r.length} 篇（失败 ${failed}）`);
@@ -268,23 +318,39 @@ function groupFactsByDate(facts: FactItem[]): Map<string, FactItem[]> {
   return byDate;
 }
 
-function buildUserPrompt(projectId: string, date: string, facts: FactItem[]): string {
+function buildUserPrompt(lang: Lang, projectId: string, date: string, facts: FactItem[]): string {
   const lines = facts.slice(0, MAX_FACTS_PER_DAY).map((f) => {
     const ts = f.updatedAt ?? f.createdAt ?? 0;
-    const time = new Date(ts).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
+    const time = new Date(ts).toLocaleTimeString(lang === 'en' ? 'en-US' : 'zh-CN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
     const agent = f.metadata?.agent ?? 'unknown';
-    const source = f.metadata?.source ? `（来源：${f.metadata.source.split('/').pop()}）` : '';
+    const source = f.metadata?.source
+      ? lang === 'en'
+        ? ` (source: ${f.metadata.source.split('/').pop()})`
+        : `（来源：${f.metadata.source.split('/').pop()}）`
+      : '';
     const text = f.memory.length > MAX_FACT_CHARS ? `${f.memory.slice(0, MAX_FACT_CHARS)}…` : f.memory;
     return `- [${time}][${agent}] ${text}${source}`;
   });
   const omitted = Math.max(0, facts.length - MAX_FACTS_PER_DAY);
-  return [
-    `项目：${projectId}`,
-    `日期：${date}`,
-    '',
-    `当日记忆条目（按时间排序${omitted ? `，另有 ${omitted} 条因篇幅省略` : ''}）：`,
-    ...lines,
-  ].join('\n');
+  return lang === 'en'
+    ? [
+        `Project: ${projectId}`,
+        `Date: ${date}`,
+        '',
+        `The day's memory entries (time-ordered${omitted ? `, ${omitted} more omitted for length` : ''}):`,
+        ...lines,
+      ].join('\n')
+    : [
+        `项目：${projectId}`,
+        `日期：${date}`,
+        '',
+        `当日记忆条目（按时间排序${omitted ? `，另有 ${omitted} 条因篇幅省略` : ''}）：`,
+        ...lines,
+      ].join('\n');
 }
 
 // ---------- 手写痕迹护栏 ----------

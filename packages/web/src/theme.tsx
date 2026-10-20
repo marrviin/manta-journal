@@ -8,12 +8,29 @@ import type { ReactNode } from "react";
 import { App as AntdApp, ConfigProvider } from "antd";
 import { StyleProvider } from "@ant-design/cssinjs";
 import zhCN from "antd/locale/zh_CN";
+import enUS from "antd/locale/en_US";
+import { I18nProvider, useI18n } from "./i18n";
+
+/** All providers shared by every renderer window (main app + settings +
+ *  journal-book): I18nProvider (language, above the theme so antd's component
+ *  locale follows it) + StyleProvider (cssinjs layering) + the journal
+ *  ConfigProvider theme + AntdApp's toast context. Extracted so a second
+ *  BrowserWindow entry can mount antd components with the exact same look
+ *  without importing app.tsx (circular). */
+export function AppProviders({ children }: { children: ReactNode }) {
+  return (
+    <I18nProvider>
+      <ThemeProviders>{children}</ThemeProviders>
+    </I18nProvider>
+  );
+}
 
 export function ThemeProviders({ children }: { children: ReactNode }) {
+  const { lang } = useI18n();
   return (
     <StyleProvider layer>
       <ConfigProvider
-        locale={zhCN}
+        locale={lang === "en" ? enUS : zhCN}
         theme={{
           cssVar: { key: "journal" },
           token: {

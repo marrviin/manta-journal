@@ -7,7 +7,15 @@
 import { BrowserWindow } from 'electron';
 import path from 'node:path';
 
+import { tMain } from './i18n';
+
 let settingsWin: BrowserWindow | null = null;
+
+/** Re-localize the settings window's title after a language switch (no-op when
+ *  the window is closed — the next createOrShow reads the fresh language). */
+export function refreshSettingsWindowTitle(): void {
+  if (settingsWin && !settingsWin.isDestroyed()) settingsWin.setTitle(tMain('win.settings'));
+}
 
 /** Create (or focus) the singleton settings window. `mainWin` is only used to be
  *  notified when the settings window closes (journal://settings-closed → the main
@@ -25,7 +33,7 @@ export function createOrShowSettingsWindow(mainWin: BrowserWindow): void {
     height: 640,
     minWidth: 720,
     minHeight: 520,
-    title: '设置',
+    title: tMain('win.settings'),
     show: false,
     // macOS: same hidden-inset look as the main window; the lights sit vertically
     // centered in the renderer's 54px header strip (y=(54-12)/2=21). Other platforms

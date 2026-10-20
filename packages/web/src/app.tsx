@@ -47,7 +47,9 @@ import journalIllustration from "./assets/journal.png";
 import type { Fact, ImportProgress, Project } from "./types";
 import { menuSkinTheme } from "./menu-skin";
 import { ThemeProviders } from "./theme";
-import { AgentIcon } from "./agent-icon";
+import { AgentIcon, agentLabel } from "./agent-icon";
+import { useI18n } from "./i18n";
+import type { I18nKey } from "@manta-journal/shared";
 import { InlineMd } from "./inline-md";
 import { MarqueeLabel } from "./marquee-label";
 import { JournalView } from "./journal-view";
@@ -67,6 +69,7 @@ export default function App() {
 
 function Shell() {
   const { message, modal } = AntdApp.useApp();
+  const { t } = useI18n();
   const [projects, setProjects] = useState<Project[]>([]);
   const [activePath, setActivePath] = useState<string | null>(null);
   const [facts, setFacts] = useState<Fact[]>([]);
@@ -96,7 +99,7 @@ function Shell() {
         setProjects(ps);
         setProjectsLoaded(true);
       })
-      .catch((e) => notify(`加载项目失败: ${e}`, "error"));
+      .catch((e) => notify(t("err.loadProjectsArg", String(e)), "error"));
   }, [notify]);
 
   // Bootstrap the renderer-direct HTTP endpoint before the first display load:
@@ -111,11 +114,11 @@ function Shell() {
         .initMemoryEndpoint()
         .then((ok) => {
           if (!ok && !opts.quiet)
-            notify("记忆服务未配置，请在设置中配置模型服务", "error");
+            notify(t("err.memoryUnconfiguredHint"), "error");
           reloadProjects();
         })
         .catch((e) => {
-          if (!opts.quiet) notify(`记忆服务连接失败: ${e}`, "error");
+          if (!opts.quiet) notify(t("err.memoryConnectFailed", String(e)), "error");
         });
     },
     [notify, reloadProjects],
@@ -228,8 +231,9 @@ function Shell() {
           p.report.added + p.report.updated + p.report.deleted > 0
         ) {
           notify(
-            `存量导入完成：新增 ${p.report.added}，更新 ${p.report.updated}` +
-              (p.report.deleted ? `，删除 ${p.report.deleted}` : ""),
+            p.report.deleted
+              ? t("notice.importDone", p.report.added, p.report.updated, p.report.deleted)
+              : t("notice.importDoneNoDel", p.report.added, p.report.updated),
           );
         }
       }
@@ -243,7 +247,7 @@ function Shell() {
         reloadProjects();
         setActivePath(project.path);
       } catch (e) {
-        notify(`添加项目失败: ${e}`, "error");
+        notify(t("err.addProject", String(e)), "error");
       }
     },
     [notify, reloadProjects],
@@ -271,20 +275,19 @@ function Shell() {
     // row + every fact in the vector store) — irreversible, so confirm with
     // the consequence spelled out.
     modal.confirm({
-      title: `移除项目「${project.name}」？`,
-      content:
-        "该项目在记忆服务中的全部记忆（含向量）将被一并删除，此操作不可恢复。",
-      okText: "删除并移除",
+      title: t("fact.removeTitle", project.name),
+      content: t("fact.removeDesc"),
+      okText: t("fact.removeOk"),
       okButtonProps: { danger: true },
-      cancelText: "取消",
+      cancelText: t("common.cancel"),
       onOk: async () => {
         try {
           await api.removeProject(project.path);
           if (activePath === project.path) setActivePath(null);
           reloadProjects();
-          notify(`已移除项目「${project.name}」`);
+          notify(t("fact.removed", project.name));
         } catch (e) {
-          notify(`移除失败: ${e}`, "error");
+          notify(t("err.removeProject", String(e)), "error");
         }
       },
     });
@@ -302,7 +305,10 @@ function Shell() {
       p.path === api.GLOBAL_PROJECT ? <GlobalOutlined /> : <FolderOutlined />,
     label: (
       <span className="flex w-full min-w-0 items-center">
-        <MarqueeLabel className="w-auto flex-[1_1_auto]" text={p.name} />
+        <MarqueeLabel
+          className="w-auto flex-[1_1_auto]"
+          text={p.path === api.GLOBAL_PROJECT ? t("project.global") : p.name}
+        />
         <span className="pc-menu-meta">{p.factCount}</span>
         {p.path !== api.GLOBAL_PROJECT && (
           <Dropdown
@@ -314,7 +320,7 @@ function Shell() {
                   key: "remove",
                   danger: true,
                   icon: <DeleteOutlined />,
-                  label: "移除项目",
+                  label: t("fact.removeMenu"),
                 },
               ],
               onClick: ({ key, domEvent }) => {
@@ -351,7 +357,7 @@ function Shell() {
           <div
             className="flex shrink-0 cursor-pointer items-center gap-2 px-4 pb-3"
             onClick={() => setActivePath(null)}
-            title="回到首页"
+            title={t("nav.backHome")}
           >
             <div className="min-w-0">
               <div className="flex items-baseline gap-1.5">
@@ -360,7 +366,7 @@ function Shell() {
                 </span>
               </div>
               <div className="truncate mt-1 text-[12px] leading-tight text-muted">
-                共享记忆总线
+                {t("nav.tagline")}
               </div>
             </div>
           </div>
@@ -373,7 +379,7 @@ function Shell() {
                 selectable={false}
                 className="pc-menu-skin px-2 pt-2 pb-3"
                 items={[
-                  { key: "add", icon: <PlusOutlined />, label: "添加项目" },
+                  { key: "add", icon: <PlusOutlined />, label: t("nav.addProject") },
                 ]}
                 onClick={() => void pickDirectory()}
               />
@@ -383,7 +389,7 @@ function Shell() {
           {/* Divider between the action area and the project list */}
           <div className="mx-2 my-1 h-px shrink-0 bg-split" />
           <div className="shrink-0 px-4 pt-1 pb-1 text-[12px] text-muted">
-            项目
+            {t("nav.projects")}
           </div>
 
           {projects.length === 0 ? (
@@ -411,7 +417,7 @@ function Shell() {
               className="flex h-8 w-full cursor-pointer items-center gap-2 rounded-lg border-0 bg-transparent px-2 text-sm text-fg transition-colors hover:bg-hover"
             >
               <SettingOutlined />
-              <span className="flex-1 text-left">设置</span>
+              <span className="flex-1 text-left">{t("nav.settings")}</span>
               <span className="text-xs text-muted">v{pkg.version}</span>
             </button>
           </div>
@@ -439,7 +445,7 @@ function Shell() {
               className="w-[min(360px,80%)] select-none"
               draggable={false}
             />
-            <div className="text-[14px] text-muted">共享记忆总线</div>
+            <div className="text-[14px] text-muted">{t("nav.tagline")}</div>
           </div>
         )}
       </div>
@@ -462,6 +468,7 @@ function FactPanel({
   loading: boolean;
   onNotify: Notify;
 }) {
+  const { t, lang } = useI18n();
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [hits, setHits] = useState<api.SemanticHit[] | null>(null);
@@ -508,7 +515,7 @@ function FactPanel({
         .join(",");
       await api.regenerateJournals(project.path);
       setJournalRegenNonce((n) => n + 1);
-      onNotify("已删除现有日记，正在重新生成…");
+      onNotify(t("journal.regenStarted"));
       for (let i = 0; i < 15; i++) {
         await new Promise((r) => setTimeout(r, 8000));
         if (seq !== journalGenSeq.current) return; // superseded by a newer click
@@ -518,7 +525,7 @@ function FactPanel({
         if (before ? now === before : now) break;
       }
     } catch (e: any) {
-      onNotify(`重新生成失败: ${e?.message ?? e}`, "error");
+      onNotify(t("journal.regenFailed", String(e?.message ?? e)), "error");
     } finally {
       if (seq === journalGenSeq.current) setJournalGen(false);
     }
@@ -579,7 +586,8 @@ function FactPanel({
             .catch(() => {});
         }
       } catch (e: any) {
-        if (!cancelled) onNotify(`检索失败: ${e?.message ?? e}`, "error");
+        if (!cancelled)
+          onNotify(t("err.search", String(e?.message ?? e)), "error");
       } finally {
         if (!cancelled) setSearching(false);
       }
@@ -601,10 +609,10 @@ function FactPanel({
               {project.name}
             </h2>
             <Tag className="m-0">
-              {agentFilter
-                ? `${shownFacts.length}/${facts.length}`
-                : facts.length}{" "}
-              条记忆
+              {t(
+                "fact.count",
+                agentFilter ? `${shownFacts.length}/${facts.length}` : facts.length,
+              )}
             </Tag>
           </div>
           <div className="flex shrink-0 items-center gap-3">
@@ -640,7 +648,7 @@ function FactPanel({
                       ? importing.files[importing.files.length - 1]
                           .split("/")
                           .pop()
-                      : `共 ${importing.total} 个文件，等待导入…`}
+                      : t("fact.importWaiting", importing.total)}
                   </span>
                 </div>
               </div>
@@ -665,7 +673,7 @@ function FactPanel({
                 defaultActiveFirstOption={false}
               >
                 <Input
-                  placeholder="输入关键词搜索"
+                  placeholder={t("search.placeholder")}
                   allowClear
                   suffix={searching ? <LoadingOutlined spin /> : undefined}
                 />
@@ -680,7 +688,7 @@ function FactPanel({
                     <button
                       key={agent}
                       type="button"
-                      title={`${AGENT_LABELS[agent] ?? agent}（点击过滤，再次点击取消）`}
+                      title={`${agentLabel(lang, agent)}${t("fact.filterHint")}`}
                       onClick={() =>
                         setAgentFilter((cur) => (cur === agent ? null : agent))
                       }
@@ -701,7 +709,11 @@ function FactPanel({
             {journalMode && (
               <button
                 type="button"
-                title={journalLayout === "list" ? "切换为栅格布局" : "切换为列表布局"}
+                title={
+                  journalLayout === "list"
+                    ? t("journal.toGrid")
+                    : t("journal.toList")
+                }
                 onClick={toggleJournalLayout}
                 className={`flex cursor-pointer items-center rounded-lg border-0 p-1.5 transition-colors ${
                   journalLayout === "grid"
@@ -715,7 +727,7 @@ function FactPanel({
             {journalMode && (
               <button
                 type="button"
-                title="调试用：删除本项目过去的日记并从同样的记忆条目重新生成（今天的日记不受影响）"
+                title={t("journal.regenHint")}
                 onClick={() => void triggerJournalGen()}
                 disabled={journalGen}
                 className={`flex cursor-pointer items-center rounded-lg border-0 p-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
@@ -731,7 +743,7 @@ function FactPanel({
             {/* Rightmost entry: toggle the journal reader (experiment logs) */}
             <button
               type="button"
-              title="实验日志（点击切换日志视图）"
+              title={t("journal.toggleHint")}
               onClick={() => setJournalMode((v) => !v)}
               className={`flex cursor-pointer items-center rounded-lg border-0 p-1.5 transition-colors ${
                 journalMode
@@ -745,7 +757,7 @@ function FactPanel({
         </div>
         {watchAgents.length === 0 && (
           <p className="mt-1 mb-0 truncate text-xs text-muted">
-            （未配置监听卡片，见 设置 → 记忆管理）
+            {t("fact.noWatchHint")}
           </p>
         )}
       </header>
@@ -763,19 +775,19 @@ function FactPanel({
             // Empty state: header line + Empty centered together in the container
             <div className="flex h-full w-full flex-col items-center justify-center gap-2">
               <p className="m-0 text-xs text-muted">
-                {`关键词检索「${query}」命中 0 条（语义路径无足够相关的命中，如英文词查中文记忆）`}
+                {t("search.keywordZero", query)}
               </p>
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description="没有语义相关的记忆。"
+                description={t("search.noSemantic")}
               />
             </div>
           ) : (
             <>
               <p className="mb-3 text-xs text-muted">
                 {shownHits?.some((h) => h.semanticScore != null)
-                  ? `混合检索「${query}」命中 ${shownHits.length} 条（关键词 + 语义，RRF 融合排序）`
-                  : `关键词检索「${query}」命中 ${shownHits?.length ?? 0} 条（语义路径无足够相关的命中，如英文词查中文记忆）`}
+                  ? t("search.hybridHits", query, shownHits.length)
+                  : t("search.keywordHits", query, shownHits?.length ?? 0)}
               </p>
               <Masonry
                 columns={{ xs: 2, sm: 2, md: 2, lg: 2, xl: 3, xxl: 4 }}
@@ -797,11 +809,11 @@ function FactPanel({
                             color={h.semanticScore > 0.6 ? "green" : "default"}
                             className="m-0"
                           >
-                            相关度 {Math.round(h.semanticScore * 100)}%
+                            {t("fact.relevance", Math.round(h.semanticScore * 100))}
                           </Tag>
                         ) : (
                           <Tag bordered={false} className="m-0">
-                            关键词匹配
+                            {t("fact.keywordMatch")}
                           </Tag>
                         )}
                       </div>
@@ -812,7 +824,11 @@ function FactPanel({
                         agent={h.agent}
                         type={h.type}
                         source={h.source}
-                        time={h.updatedAt ? formatTime(h.updatedAt) : undefined}
+                        time={
+                          h.updatedAt
+                            ? formatTime(h.updatedAt, lang)
+                            : undefined
+                        }
                       />
                     </div>
                   ),
@@ -844,7 +860,7 @@ function FactPanel({
                   description={false}
                 />
                 {importing && (
-                  <span className="text-xs text-muted">存量记忆导入中…</span>
+                  <span className="text-xs text-muted">{t("fact.importing")}</span>
                 )}
               </div>
             )}
@@ -855,18 +871,9 @@ function FactPanel({
   );
 }
 
-const AGENT_LABELS: Record<string, string> = {
-  "claude-code": "Claude Code",
-  joycode: "JoyCode",
-  codex: "Codex",
-  hermes: "Hermes",
-  myagent: "自研 Agent",
-  user: "人工",
-};
-
-const TYPE_LABELS: Record<string, string> = {
-  "local-memory": "本地记忆",
-  manual: "人工录入",
+const TYPE_KEYS: Record<string, I18nKey> = {
+  "local-memory": "type.localMemory",
+  manual: "type.manual",
 };
 
 function shortenPath(path: string) {
@@ -920,8 +927,8 @@ function MiddlePath({ text }: { text: string }) {
 }
 
 /** Card metadata timestamp: MM/DD HH:mm — fits even on narrow masonry cards */
-function formatTime(ts: number) {
-  return new Date(ts).toLocaleString("zh-CN", {
+function formatTime(ts: number, lang: "zh" | "en") {
+  return new Date(ts).toLocaleString(lang === "en" ? "en-US" : "zh-CN", {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
@@ -945,11 +952,12 @@ function FactMeta({
   source?: string;
   time?: string;
 }) {
-  const parts = [
-    agent ? (AGENT_LABELS[agent] ?? agent) : null,
-    type ? (TYPE_LABELS[type] ?? type) : null,
-  ].filter(Boolean);
   const { message } = AntdApp.useApp();
+  const { t, lang } = useI18n();
+  const parts = [
+    agent ? agentLabel(lang, agent) : null,
+    type ? (TYPE_KEYS[type] ? t(TYPE_KEYS[type]) : type) : null,
+  ].filter(Boolean);
   return (
     <div className="mt-3 min-w-0 text-[11px] text-muted">
       <div className="flex items-center justify-between gap-2">
@@ -959,10 +967,10 @@ function FactMeta({
       {source && (
         <div
           className="mt-1 cursor-pointer font-mono text-[10px] transition-colors hover:text-fg"
-          title={`${shortenPath(source)}（点击打开文件）`}
+          title={`${shortenPath(source)}${t("fact.openFileHint")}`}
           onClick={() => {
             api.openPath(source).catch((e) => {
-              message.error(`打开文件失败: ${e?.message ?? e}`);
+              message.error(t("err.openFile", String(e?.message ?? e)));
             });
           }}
         >
@@ -974,6 +982,7 @@ function FactMeta({
 }
 
 function FactCard({ fact }: { fact: Fact }) {
+  const { lang } = useI18n();
   return (
     <div className="rounded-xl border border-line bg-surface p-4">
       <p className="m-0 text-sm leading-6 whitespace-pre-wrap wrap-anywhere">
@@ -983,7 +992,9 @@ function FactCard({ fact }: { fact: Fact }) {
         agent={fact.agent}
         type={fact.type}
         source={fact.source}
-        time={fact.updatedAt ? formatTime(fact.updatedAt) : undefined}
+        time={
+          fact.updatedAt ? formatTime(fact.updatedAt, lang) : undefined
+        }
       />
     </div>
   );

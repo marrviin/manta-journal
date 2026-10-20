@@ -10,9 +10,10 @@ import * as inject from "./inject";
 import * as mem0 from "./mem0";
 import * as watcher from "./watcher";
 import * as mcpServer from "./mcp-server";
-import { createOrShowSettingsWindow, closeSettingsWindow } from "./settings-window";
-import { createOrShowJournalWindow } from "./journal-window";
+import { createOrShowSettingsWindow, closeSettingsWindow, refreshSettingsWindowTitle } from "./settings-window";
+import { createOrShowJournalWindow, refreshJournalWindowTitle } from "./journal-window";
 import { log } from "./log";
+import { getLang, setLang, tMain } from "./i18n";
 
 export interface IpcContext {
   userDataDir: string;
@@ -36,7 +37,7 @@ export function registerIpc(ctx: IpcContext): void {
   // settings changes without an app restart.
   ipcMain.handle("memory_endpoint", async () => {
     const conn = await mem0.ensureMemory(ctx.userDataDir);
-    if (!conn) throw new Error("记忆服务未连接（未启用或未配置）");
+    if (!conn) throw new Error(tMain("err.memoryNotConnected"));
     return { base: conn.base, token: conn.token };
   });
 
@@ -53,7 +54,7 @@ export function registerIpc(ctx: IpcContext): void {
   // window — it receives journal://settings-closed when the settings window closes.
   ipcMain.handle("open_settings", (e) => {
     const mainWin = BrowserWindow.fromWebContents(e.sender);
-    if (!mainWin) throw new Error("主窗口不可用");
+    if (!mainWin) throw new Error(tMain("err.mainWindowUnavailable"));
     createOrShowSettingsWindow(mainWin);
   });
 
@@ -90,7 +91,7 @@ export function registerIpc(ctx: IpcContext): void {
       if (!fs.statSync(resolved).isDirectory()) {
         // Throw (not return a string): the renderer would otherwise treat the
         // string as a Project object and toast a fake "已接管项目「undefined」".
-        throw new Error(`目录不存在：${path}`);
+        throw new Error(tMain("err.dirNotFound", path));
       }
       const isNew = store.insertProject(resolved);
       log(`add_project: resolved=${resolved} isNew=${isNew}`);
@@ -106,7 +107,7 @@ export function registerIpc(ctx: IpcContext): void {
           .catch((e) => log(`add_project 存量导入失败: ${e}`));
       }
       const project = store.listProjects().find((p) => p.path === resolved);
-      if (!project) throw new Error(`项目注册失败：${resolved}`);
+      if (!project) throw new Error(tMain("err.projectRegisterFailed", resolved));
       return project;
     } catch (e) {
       log(`add_project 失败: ${e}`);
@@ -273,7 +274,7 @@ export function registerIpc(ctx: IpcContext): void {
   ipcMain.handle("activate_model", (_e, id: string) =>
     ok(() => {
       const entry = settings.loadModels(store).find((m) => m.id === id);
-      if (!entry) throw new Error("模型配置不存在");
+      if (!entry) throw new Error(tMain("err.modelNotFound"));
       return {
         activeId: settings.activeIdOf(store, settings.loadModels(store)),
         notice: (applyLlmConfig(entry.apiKey || null, entry), undefined),
@@ -289,7 +290,7 @@ export function registerIpc(ctx: IpcContext): void {
     "test_memory_connection",
     async (_e, url: string, token: string | null) => {
       const base = url.trim().replace(/\/+$/, "");
-      if (!base) return { ok: false, error: "请先填写服务地址" };
+      if (!base) return { ok: false, error: tMain("settings.data.needUrl") };
       try {
         const resp = await fetch(`${base}/health`, {
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
@@ -311,7 +312,7 @@ export function registerIpc(ctx: IpcContext): void {
           notice: j.notice,
         };
       } catch (e) {
-        return { ok: false, error: `无法连接 ${base}：${e}` };
+        return { ok: false, error: tMain("err.cannotConnect", base, String(e)) };
       }
     },
   );
@@ -323,6 +324,27 @@ export function registerIpc(ctx: IpcContext): void {
   );
   ipcMain.handle("set_last_project", (_e, path: string) =>
     ok(() => store.setSetting("last_project", path)),
+  );
+
+  // ---------- UI language ----------
+
+  ipcMain.handle("get_language", () => ok(() => getLang()));
+
+  // Persist the language, then broadcast to every window so the open ones
+  // switch live, and refresh the native window titles (the main window's
+  // title is inert "Journal" — only the settings/book windows carry localized
+  // titles).
+  ipcMain.handle("set_language", (_e, lang: unknown) =>
+    ok(() => {
+      setLang(lang === "en" ? "en" : "zh");
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (!win.isDestroyed()) {
+          win.webContents.send("journal://language-changed", lang);
+        }
+      }
+      refreshSettingsWindowTitle();
+      refreshJournalWindowTitle();
+    }),
   );
 
   // ---------- Memory watch rules ----------
@@ -356,7 +378,7 @@ export function registerIpc(ctx: IpcContext): void {
     "semantic_search",
     async (_e, projectId: string, query: string) => {
       const q = query.trim();
-      if (!q) throw new Error("查询不能为空");
+      if (!q) throw new Error(tMain("err.emptyQuery"));
       // Same hybrid retrieval as the MCP tool (BM25 + semantic, fused, same gates)
       // so the GUI never shows different results than what the model sees.
       const hits = await mcpServer.hybridSearch(projectId, q);
@@ -379,7 +401,7 @@ export function registerIpc(ctx: IpcContext): void {
   ipcMain.handle("open_external", (_e, url: string) =>
     ok(() => {
       if (typeof url !== "string" || !/^https:\/\//.test(url)) {
-        throw new Error(`不允许打开的链接：${url}`);
+        throw new Error(tMain("err.urlNotAllowed", url));
       }
       shell.openExternal(url);
     }),
@@ -389,7 +411,7 @@ export function registerIpc(ctx: IpcContext): void {
   ipcMain.handle("open_path", (_e, path: string) =>
     ok(async () => {
       if (typeof path !== "string" || !path.startsWith("/")) {
-        throw new Error(`不允许打开的路径：${path}`);
+        throw new Error(tMain("err.pathNotAllowed", path));
       }
       const err = await shell.openPath(path);
       if (err) throw new Error(err);

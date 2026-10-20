@@ -5,6 +5,7 @@
 //! mem0 — no vector search, no mirror, no fact count.
 
 import path from 'node:path';
+import { tReq } from '../i18n';
 
 import type { Static } from '@sinclair/typebox';
 import type { FastifyInstance } from 'fastify';
@@ -21,6 +22,7 @@ import {
 import { listJournalFiles as scanJournalFiles } from '../journal-fs';
 import { generateMissingJournals, planMissingJournals, regenerateJournals } from '../core/journal-gen';
 import { projectRows } from '../store';
+import { currentLang } from '../i18n';
 
 export default async function journalRoutes(app: FastifyInstance): Promise<void> {
   app.get<{ Params: Static<typeof ProjectIdParams> }>(
@@ -55,9 +57,16 @@ export default async function journalRoutes(app: FastifyInstance): Promise<void>
       if (!app.cfg.llm.apiKey) {
         // Surface the no-key state instead of a silent ok:true (the writer's
         // own guard would otherwise drop the request with no feedback).
-        throw app.httpErrors.badRequest('聊天 LLM 未配置（无 API Key），无法生成日记');
+        throw app.httpErrors.badRequest(tReq('err.llmNotConfigured'));
       }
-      void generateMissingJournals(app.cfg.llm, app.cfg.dataDir, req.body.projectId?.trim() || undefined);
+      void generateMissingJournals(
+        app.cfg.llm,
+        app.cfg.dataDir,
+        req.body.projectId?.trim() || undefined,
+        // The diary language follows the display layer's UI language for
+        // request-driven generates (the scheduler uses the stored setting).
+        currentLang(),
+      );
       return { ok: true };
     },
   );
@@ -73,9 +82,9 @@ export default async function journalRoutes(app: FastifyInstance): Promise<void>
     },
     async (req) => {
       if (!app.cfg.llm.apiKey) {
-        throw app.httpErrors.badRequest('聊天 LLM 未配置（无 API Key），无法生成日记');
+        throw app.httpErrors.badRequest(tReq('err.llmNotConfigured'));
       }
-      void regenerateJournals(app.cfg.llm, app.cfg.dataDir, req.body.projectId.trim());
+      void regenerateJournals(app.cfg.llm, app.cfg.dataDir, req.body.projectId.trim(), currentLang());
       return { ok: true };
     },
   );

@@ -6,9 +6,10 @@
 import type { Static } from '@sinclair/typebox';
 import type { FastifyInstance } from 'fastify';
 
-import { OkResponse, PersonalizationBody, PersonalizationResponse } from '../schemas';
-import { SBTI_TYPES } from '@journal/shared';
-import { getSetting, setSetting, USER_DISPLAY_NAME, PARTNER_PERSONALITY } from '../store';
+import { OkResponse, PersonalizationBody, PersonalizationResponse, LanguageBody } from '../schemas';
+import { SBTI_TYPES } from '@manta-journal/shared';
+import { getSetting, setSetting, USER_DISPLAY_NAME, PARTNER_PERSONALITY, JOURNAL_LANGUAGE } from '../store';
+import { normalizeLang } from '@manta-journal/shared';
 
 /** Sanity cap: a 称呼 is a name, not a sentence. */
 const MAX_NAME_CHARS = 50;
@@ -20,7 +21,7 @@ export function ensurePartnerPersonality(dataDir: string): void {
   if (getSetting(dataDir, PARTNER_PERSONALITY)) return;
   const picked = SBTI_TYPES[Math.floor(Math.random() * SBTI_TYPES.length)]!;
   setSetting(dataDir, PARTNER_PERSONALITY, picked.id);
-  console.log(`[Journal server] personalization: 搭档性格随机抽中「${picked.name}」（${picked.code}）`);
+  console.log(`[Journal server] personalization: 搭档性格随机抽中「${picked.zh.name}」（${picked.code}）`);
 }
 
 export default async function settingsRoutes(app: FastifyInstance): Promise<void> {
@@ -46,6 +47,21 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
         req.body.displayName.trim().slice(0, MAX_NAME_CHARS),
       );
       setSetting(app.cfg.dataDir, PARTNER_PERSONALITY, req.body.personality);
+      return { ok: true };
+    },
+  );
+
+  // The display layer pushes its UI language here on every settings-window
+  // switch, so the hourly journal scheduler (no request context) writes its
+  // entries in the language the user actually reads. Request-driven generates
+  // override this with the X-App-Language header.
+  app.put<{ Body: Static<typeof LanguageBody> }>(
+    '/settings/language',
+    {
+      schema: { body: LanguageBody, response: { 200: OkResponse }, operationId: 'setLanguage' },
+    },
+    async (req) => {
+      setSetting(app.cfg.dataDir, JOURNAL_LANGUAGE, normalizeLang(req.body.lang));
       return { ok: true };
     },
   );

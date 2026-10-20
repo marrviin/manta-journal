@@ -15,6 +15,8 @@
 import { App as AntdApp } from 'antd';
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import * as api from './api';
+import { t } from "@manta-journal/shared";
+import { currentLang } from "./i18n-lang";
 
 const TOKEN_RE =
   /(`[^`\n]+`)|(\*\*[^*\n]+\*\*)|(\*[^*\n]+\*)|(~~[^~\n]+~~)|(\[[^\]\n]*\]\([^)\s]+\))/g;
@@ -234,7 +236,7 @@ export function InlineMd({ text, hand = false }: { text: string; hand?: boolean 
   const { message } = AntdApp.useApp();
   const openExternal = (url: string) => {
     api.openExternal(url).catch((e: any) => {
-      message.error(`无法打开链接: ${e?.message ?? e}`);
+      message.error(t(currentLang(), "err.openLink", String(e?.message ?? e)));
     });
   };
   return <>{renderInline(text, 'md', openExternal, hand)}</>;

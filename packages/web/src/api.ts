@@ -20,6 +20,7 @@ import {
   listJournals as listJournalsHttp,
   listProjects as listProjectsHttp,
   savePersonalization as savePersonalizationHttp,
+  setLanguage as setLanguageHttp,
   registerProject as registerProjectHttp,
   regenerateJournals as regenerateJournalsHttp,
   removeProject as removeProjectHttp,
@@ -27,6 +28,8 @@ import {
   updateFact as updateFactHttp,
 } from "./client";
 import { getMemoryEndpoint, setMemoryEndpoint } from "./api-http";
+import { t } from "@manta-journal/shared";
+import { currentLang } from "./i18n-lang";
 import {
   getSearchHistory as getSearchHistoryLocal,
   pushSearchHistory as pushSearchHistoryLocal,
@@ -77,12 +80,21 @@ async function withReconnect<T>(call: () => Promise<T>): Promise<T> {
 export const syncMirror = (projectId: string) =>
   window.journal.invoke("sync_mirror", projectId);
 
-/** Throw with the standard notice when the endpoint was never bootstrapped
- *  (service disabled in settings) — display APIs would otherwise fire requests
- *  at an unset baseUrl. */
+/** Thrown by requireEndpoint when the endpoint was never bootstrapped (service
+ *  disabled in settings) — callers detect this class instead of matching the
+ *  (localized) message text. */
+export class NotConnectedError extends Error {
+  constructor() {
+    super(t(currentLang(), 'err.memoryNotConnected'));
+    this.name = 'NotConnectedError';
+  }
+}
+
+/** Throw with the standard notice when the endpoint was never bootstrapped —
+ *  display APIs would otherwise fire requests at an unset baseUrl. */
 function requireEndpoint(): void {
   if (!getMemoryEndpoint()) {
-    throw new Error("记忆服务未连接（未启用或未配置）");
+    throw new NotConnectedError();
   }
 }
 
@@ -107,7 +119,7 @@ export async function listProjects(): Promise<Project[]> {
   return withReconnect(async () => {
     requireEndpoint();
     const { data } = await listProjectsHttp();
-    if (!data) throw new Error("项目列表加载失败");
+    if (!data) throw new Error(t(currentLang(), 'err.loadProjects'));
     // Server rows are insertion-ordered; the reserved global project pins first
     // regardless of when it was seeded (same order the desktop mirror used).
     const rows = data.projects.map(mapProject);
@@ -138,7 +150,7 @@ export async function addProject(path: string): Promise<Project> {
   requireEndpoint();
   const { data, error } = await registerProjectHttp({ body: { projectId: path } });
   if (error) throw error;
-  if (!data) throw new Error("项目注册失败");
+  if (!data) throw new Error(t(currentLang(), 'err.registerFailed'));
   return mapProject(data);
 }
 
@@ -180,7 +192,7 @@ export async function listFacts(projectId: string): Promise<Fact[]> {
   return withReconnect(async () => {
     requireEndpoint();
     const { data } = await listFactsHttp({ path: { projectId } });
-    if (!data) throw new Error("记忆列表加载失败");
+    if (!data) throw new Error(t(currentLang(), 'err.loadFacts'));
     return data.facts.map((f) => mapFact(projectId, f));
   });
 }
@@ -412,7 +424,7 @@ export async function searchMemories(
   return withReconnect(async () => {
     requireEndpoint();
     const { data } = await searchMemoriesHttp({ body: { projectId, query } });
-    if (!data) throw new Error("检索失败");
+    if (!data) throw new Error(t(currentLang(), 'err.searchFailed'));
     return data.hits.map((h) => ({
       id: h.id,
       memory: h.memory,
@@ -434,7 +446,7 @@ export async function listJournals(projectId: string): Promise<JournalEntry[]> {
   return withReconnect(async () => {
     requireEndpoint();
     const { data } = await listJournalsHttp({ path: { projectId } });
-    if (!data) throw new Error("日志列表加载失败");
+    if (!data) throw new Error(t(currentLang(), 'err.loadJournals'));
     return data.journals;
   });
 }
@@ -447,7 +459,7 @@ export async function getJournalPending(projectId?: string): Promise<JournalPend
     const { data } = await getJournalPendingHttp(
       projectId ? { query: { projectId } } : {},
     );
-    if (!data) throw new Error("待生成检查失败");
+    if (!data) throw new Error(t(currentLang(), 'err.pendingCheckFailed'));
     return data.pending;
   });
 }
@@ -469,6 +481,14 @@ export async function regenerateJournals(projectId: string): Promise<void> {
   if (error) throw error;
 }
 
+// ---------- UI language (server-side diary language) ----------
+
+/** Push the UI language to the memory service so the journal scheduler's
+ *  hourly pass writes entries in the language the user reads. Request-driven
+ *  generates instead carry X-App-Language per call. */
+export const setServerLanguage = (lang: "zh" | "en") =>
+  setLanguageHttp({ body: { lang } }).catch(() => {});
+
 // ---------- Personalization (server-owned settings) ----------
 
 /** 个性化设置：日记作者对用户的称呼（空 = 默认「搭档」）与搭档性格
@@ -481,7 +501,7 @@ export interface Personalization {
 export async function getPersonalization(): Promise<Personalization> {
   requireEndpoint();
   const { data } = await getPersonalizationHttp();
-  if (!data) throw new Error("个性化设置加载失败");
+  if (!data) throw new Error(t(currentLang(), 'err.loadPersonalization'));
   return data;
 }
 

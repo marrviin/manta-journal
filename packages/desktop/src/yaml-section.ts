@@ -7,6 +7,7 @@
 //! is preserved byte-for-byte. Flow-style values ({} / inline maps) throw so a
 //! config we can't reason about is never mangled.
 
+import { tMain } from './i18n';
 function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -40,7 +41,7 @@ export function upsertYamlMappingEntry(
     if (new RegExp(`^${escapeRe(rootKey)}:\\s*[^#\\s]`).test(text)) {
       // Flow-style / non-mapping value: not something line editing may touch.
       throw new Error(
-        `无法自动编辑 ${rootKey} 配置（不是块状映射），请手动添加 journal 条目`,
+        tMain('yaml.manualEdit', rootKey),
       );
     }
     // Root mapping absent: append it (fresh file → no leading blank line).
